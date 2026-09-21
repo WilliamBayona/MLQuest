@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ML Quest · Control</title>
+<style>
+  :root { --bg:#14121c; --panel:#2b2540; --fg:#f2ead8; --accent:#e16714; --ok:#5fd068; --warn:#f2c14e; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family: ui-monospace, Menlo, Consolas, monospace; overflow:hidden; touch-action:none; overscroll-behavior:none; }
+  .pad { position:fixed; inset:0; display:grid; grid-template-columns:1fr 1fr; align-items:center; padding:max(16px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); gap:16px; }
+  .status { position:fixed; top:8px; left:0; right:0; text-align:center; font-size:12px; opacity:.85; pointer-events:none; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn); margin-right:6px; }
+  .dot.on { background:var(--ok); }
+  button { font:inherit; color:var(--fg); background:var(--panel); border:3px solid #0d0b14; border-radius:14px; box-shadow:0 5px 0 #0d0b14; touch-action:none; font-weight:700; }
+  button.on { transform:translateY(4px); box-shadow:0 1px 0 #0d0b14; background:var(--accent); }
+  .dpad { justify-self:start; display:grid; grid-template-columns:repeat(3, var(--s)); grid-template-rows:repeat(3, var(--s)); --s:min(20vw, 26vh); gap:4px; }
+  .dpad button { font-size:calc(var(--s) * .4); border-radius:12px; }
+  .dpad [data-b=up] { grid-area:1/2; } .dpad [data-b=left] { grid-area:2/1; }
+  .dpad [data-b=right] { grid-area:2/3; } .dpad [data-b=down] { grid-area:3/2; }
+  .acts { justify-self:end; position:relative; width:min(44vw, 60vh); height:min(38vw, 52vh); }
+  .acts button { position:absolute; border-radius:50%; }
+  [data-b=jump] { width:46%; aspect-ratio:1; right:2%; bottom:12%; font-size:clamp(14px,3.5vw,22px); background:#3a5fcd; }
+  [data-b=dash] { width:38%; aspect-ratio:1; left:6%; bottom:0; font-size:clamp(12px,3vw,18px); background:#2f8f5b; }
+  [data-b=hit]  { width:28%; aspect-ratio:1; left:22%; top:0; font-size:clamp(11px,2.6vw,16px); background:#b8862b; }
+  [data-b=die]  { width:22%; aspect-ratio:1; right:8%; top:0; font-size:clamp(11px,2.4vw,15px); background:#7a2a3a; }
+  [data-b].on { background:var(--accent); }
+  .rotate { display:none; position:fixed; inset:0; background:var(--bg); z-index:9; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:18px; }
+  @media (orientation:portrait) { .rotate { display:flex; } }
+</style>
+</head>
+<body>
+<div class="status"><span class="dot" id="dot"></span><span id="txt">conectando…</span></div>
+<div class="pad">
+  <div class="dpad">
+    <button data-b="up">▲</button><button data-b="left">◀</button><button data-b="right">▶</button><button data-b="down">▼</button>
+  </div>
+  <div class="acts">
+    <button data-b="hit">GOLPE</button>
+    <button data-b="die">MORIR</button>
+    <button data-b="dash">DASH</button>
+    <button data-b="jump">SALTO</button>
+  </div>
+</div>
+<div class="rotate">Gira el telefono a horizontal ↻</div>
+<script>
+'use strict';
+const state = {};
+let ws, slot = '?', games = 0;
+const dot = document.getElementById('dot'), txt = document.getElementById('txt');
+
+function send() {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'input', s: { ...state } }));
+}
+function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=controller`);
+  ws.onopen = () => { txt.textContent = 'conectado'; send(); };
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.t === 'hello') { slot = m.slot; document.title = `ML Quest · J${slot}`; }
+    if (m.t === 'hello' || m.t === 'status') {
+      if (m.games !== undefined) games = m.games;
+      dot.classList.toggle('on', games > 0);
+      txt.textContent = games > 0 ? `Jugador ${slot} · jugando` : `Jugador ${slot} · sin pantalla de juego`;
+    }
+  };
+  ws.onclose = () => { dot.classList.remove('on'); txt.textContent = 'reconectando…'; setTimeout(connect, 800); };
+}
+
+// Each button tracks its own pointer, so several can be held at once (multi-touch).
+for (const btn of document.querySelectorAll('button[data-b]')) {
+  const name = btn.dataset.b;
+  const set = (v) => {
+    if (!!state[name] === v) return;
+    state[name] = v; btn.classList.toggle('on', v); send();
+    if (v && navigator.vibrate) navigator.vibrate(8);
+  };
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); set(true); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, () => set(false));
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+addEventListener('blur', () => { for (const k in state) state[k] = false; document.querySelectorAll('.on').forEach((b) => b.classList.remove('on')); send(); });
+connect();
+</script>
+</body>
+</html>

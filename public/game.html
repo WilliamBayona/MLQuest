@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML Quest</title>
+<style>
+  :root { --panel:#221e30; --fg:#f2ead8; --accent:#e16714; --ok:#5fd068; --warn:#f2c14e; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#fff; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  canvas { position:fixed; inset:0; width:100vw; height:100vh; object-fit:contain; image-rendering:pixelated; background:#fff; display:block; }
+  .bar { position:fixed; left:8px; bottom:8px; display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; max-width:calc(100vw - 16px);
+         padding:6px 10px; border-radius:6px; background:rgba(20,18,28,.82); color:var(--fg); font-size:12px; transition:opacity .4s; }
+  .bar.hide { opacity:0; pointer-events:none; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn); margin-right:6px; }
+  .dot.on { background:var(--ok); }
+  a { color:var(--accent); }
+  kbd { background:var(--panel); padding:1px 5px; border-radius:3px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1024" height="576"></canvas>
+<div class="bar" id="bar">
+  <span><span class="dot" id="wsDot"></span><span id="wsTxt">conectando…</span></span>
+  <span>Telefono: <a id="ctrlUrl" href="/controller">/controller</a></span>
+  <span>Teclado: <kbd>←→↑↓</kbd> mover · <kbd>Espacio</kbd> saltar · <kbd>Shift</kbd> dash · <kbd>H</kbd> golpe · <kbd>K</kbd> morir · <kbd>F</kbd> pantalla completa · <kbd>I</kbd> ocultar info</span>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
