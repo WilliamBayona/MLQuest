@@ -71,26 +71,32 @@ function drawStar(ctx, cx, by) {
   ctx.fillRect(cx - 4, by - 7, 8, 2);
   ctx.fillRect(cx - 3, by - 9, 6, 6);
 }
+// The signs — floor numbers, lab titles, the map key — are text, so they are drawn smooth, not as
+// pixel art: the game paints them on a canvas at the screen's own resolution, laid over the map.
+// Sizes are still in map pixels; the caller scales the context.
+const SIGN_FONT_FAMILY = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const SIGN_FONT = `700 8px ${SIGN_FONT_FAMILY}`, SIGN_H = 10;
+function plaque(ctx, x, y, w, h, fill) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, 2); else ctx.rect(x, y, w, h);
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#000'; ctx.stroke();
+}
 // a floor number, as the black-and-yellow display above each lift door
 function drawFloorTag(ctx, cx, top, n) {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(cx - 6, top, 13, 11);
+  plaque(ctx, cx - 6, top + 0.5, 12, 10, '#111');
   ctx.fillStyle = MARK;
-  ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(String(n), cx + 0.5, top + 9);
+  ctx.font = `800 8.5px ${SIGN_FONT_FAMILY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(n), cx, top + 5.8);
 }
-// a lab's sign: its name on a plaque in the lab's colour
-const SIGN_FONT = 'bold 9px monospace', SIGN_H = 11;
-function labSignWidth(ctx, lab) { ctx.font = SIGN_FONT; return Math.ceil(ctx.measureText(lab.name).width) + 6; }
+// a lab's title: its name on a plaque in the lab's colour
+function labSignWidth(ctx, lab) { ctx.font = SIGN_FONT; return Math.ceil(ctx.measureText(lab.name).width) + 8; }
 function drawLabSign(ctx, cx, top, lab) {
-  const w = labSignWidth(ctx, lab), x = Math.round(cx - w / 2);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#000';
-  ctx.fillRect(x, top, w, SIGN_H);
-  ctx.fillStyle = lab.color;
-  ctx.fillRect(x + 1, top + 1, w - 2, SIGN_H - 2);
-  ctx.fillStyle = '#000';
-  ctx.fillText(lab.name, cx, top + 8);
+  const w = labSignWidth(ctx, lab);
+  plaque(ctx, cx - w / 2, top + 0.5, w, SIGN_H - 1, lab.color);
+  ctx.fillStyle = '#1b140f';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(lab.name, cx, top + SIGN_H / 2 + 0.3);
 }
 // the action button in miniature, floated over a player who can use it right where they stand
 function drawActButton(ctx, cx, cy) {

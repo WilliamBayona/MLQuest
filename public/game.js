@@ -511,9 +511,8 @@ function checkMarkers(p) {
   }
 }
 
-// What never changes — the floor-1 lift door the art is missing, the floor numbers over every lift
-// door, the lab signs and the key in the sky — is painted once onto a copy of the map. Only what
-// moves is drawn per frame.
+// The floor-1 lift door the art is missing is painted once onto a copy of the map. The signs — floor
+// numbers, lab titles, the key in the sky — go on their own canvas instead (drawSigns, below).
 function paintBuilding(map) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
@@ -530,11 +529,24 @@ function paintBuilding(map) {
     for (let i = 0; i < src.data.length; i += 4) if (!isWall(i)) for (let k = 0; k < 4; k++) dst.data[i + k] = src.data[i + k];
     g.putImageData(dst, d.x0, ground + d.top);
   }
-  for (const f of FLOORS) drawFloorTag(g, LIFT.x, f.row + d.top - 12, f.n);
-  for (const lab of Object.values(LABS)) drawLabSign(g, lab.sign.x, lab.sign.y, lab);
-  drawMapKey(g);
   return c;
 }
+// The signs are text, so they are drawn smooth at the screen's resolution on a canvas laid exactly over
+// the map (same box, same object-fit), not as pixel art. They never move, so this only runs when the
+// window changes size.
+const signs = document.getElementById('signs');
+function drawSigns() {
+  const S = Math.max(2, Math.min(4, Math.ceil(Math.max(innerWidth / W, innerHeight / H) * (devicePixelRatio || 1))));
+  signs.width = W * S; signs.height = H * S;
+  const g = signs.getContext('2d');
+  g.setTransform(S, 0, 0, S, 0, 0);
+  g.imageSmoothingEnabled = false;   // the few pixel-art icons in the key stay crisp
+  for (const f of FLOORS) drawFloorTag(g, LIFT.x, f.row + LIFT.door.top - 12, f.n);
+  for (const lab of Object.values(LABS)) drawLabSign(g, lab.x, lab.signY, lab);
+  drawMapKey(g);
+}
+let signsTimer = null;
+addEventListener('resize', () => { clearTimeout(signsTimer); signsTimer = setTimeout(drawSigns, 150); });
 // The key along the sky above the roof, for everyone watching the big screen: each symbol the map
 // uses, drawn by the same code as on the map, with what it means. The phones explain it too.
 const MAP_KEY = [
@@ -546,24 +558,24 @@ const MAP_KEY = [
 ];
 function drawMapKey(g) {
   const x0 = 24, y0 = 4, w = 880, h = 50, cell = w / MAP_KEY.length;
-  g.fillStyle = '#000'; g.fillRect(x0, y0, w, h);
-  g.fillStyle = '#f3ead2'; g.fillRect(x0 + 2, y0 + 2, w - 4, h - 4);
-  g.fillStyle = '#9e8572'; g.fillRect(x0 + 2, y0 + h - 5, w - 4, 3);
+  plaque(g, x0 + 0.5, y0 + 0.5, w - 1, h - 1, '#f3ead2');
+  g.fillStyle = '#d9c9a3'; g.fillRect(x0 + 2, y0 + h - 4, w - 4, 2);
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   MAP_KEY.forEach((k, i) => {
     const cx = x0 + i * cell;
     if (i) { g.fillStyle = '#9e8572'; g.fillRect(cx, y0 + 6, 1, h - 14); }
     k.icon(g, cx + 22, y0 + 22);
     g.fillStyle = '#2b2118'; g.textAlign = 'left';
-    g.font = 'bold 10px monospace'; g.fillText(k.title, cx + 40, y0 + 15);
-    g.font = '9px monospace';
+    g.font = `700 10px ${SIGN_FONT_FAMILY}`; g.fillText(k.title, cx + 40, y0 + 15);
+    g.font = `9px ${SIGN_FONT_FAMILY}`;
     k.text.forEach((t, j) => g.fillText(t, cx + 40, y0 + 27 + j * 10));
   });
 }
 function drawMarkers(t) {
   drawStar(ctx, GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
+  // each ! bobs just above head height, under its lab's title (a floor is too low for more swing)
   for (const ev of EVENTS) {
-    const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
+    const by = ev.row - 18 + Math.round(Math.sin(t * 2.2 + ev.id));
     drawBang(ctx, ev.x, by);   // always lit: the screen is shared, so a marker never goes out for everyone
   }
 }
@@ -714,6 +726,7 @@ function connect() {
   Object.keys(SPRITES).forEach((n, i) => { sheets[n] = imgs[i]; });
   buildCollision(map);   // from the bare art: the signs and numbers painted next must never become floors
   bg = paintBuilding(map);
+  drawSigns();
   // the tree's planter has no floor drawn under it: make it a solid block you can bump into or stand on
   const pl = GOAL.planter;
   for (let y = pl.top + SURFACE_SINK; y <= pl.bottom; y++) for (let x = pl.x0; x <= pl.x1; x++) kind[y * W + x] = 1;

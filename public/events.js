@@ -2,8 +2,7 @@
 
 // The aptitude test from eventos-test-orientacion-ml.md, placed on the building, plus everything
 // else about the building the game and the phones need to agree on: its floors, its lift, its labs.
-// `x` and `row` say where things stand: row is the collision row of a floor, which is also what the
-// player's feet rest on.
+// `row` is the collision row of a floor, which is also what the player's feet rest on.
 const CAREERS = {
   SIS: 'Ingeniería de Sistemas',
   ELN: 'Ingeniería Electrónica',
@@ -39,26 +38,27 @@ const floorName = (row) => { const f = floorAt(row); return f ? `Piso ${f.n}` : 
 // the game paints one there, copied from the door of `doorFrom` (door = its box, relative to row).
 const LIFT = { x: 386, door: { x0: 372, x1: 404, top: -27, bottom: -5 }, doorFrom: 479 };
 
-// The labs and named rooms, by key. Change a name, a sign position or a colour here and the map, the
-// phones and the onboarding all follow. `name` is shown everywhere, the map's sign included;
-// `sign` is where that sign hangs (x = its centre, y = its top); `area` the engineering it is about.
-// A room gets an event only if some entry in EVENTS points at it: biotec is a sign and nothing else.
-// On the 52px floors a sign and a ! do not fit one above the other, so there the sign hangs beside it.
+// The labs and named rooms, by key. Change a name, a room or a colour here and the map, the phones
+// and the onboarding all follow. `room` is the room's span on the map [left wall, right wall]: its
+// title hangs centred between them, and the room's ! (if it has one) hangs centred under the title.
+// `signY` is the title's top, just under the ceiling. `area` is the engineering the room is about.
+// A room gets an event only if some entry in EVENTS points at it: biotec is a title and nothing else.
 const LABS = {
-  ar:     { name: 'Colivri',                      sign: { x: 128, y: 497 }, area: 'Sistemas y Biomédica',    color: '#b89cff' },
-  elec:   { name: 'La Pecera',                    sign: { x: 460, y: 497 }, area: 'Electrónica y Eléctrica', color: '#ffb347' },
-  mec:    { name: 'Lab de Manufactura',           sign: { x: 850, y: 497 }, area: 'Mecánica y Civil',        color: '#a9c1d6' },
-  redes:  { name: 'Lab de Redes',                 sign: { x: 900, y: 323 }, area: 'Sistemas y Electrónica',  color: '#6ec6ff' },
-  biotec: { name: 'Laboratorio de Biotecnología', sign: { x: 137, y: 268 }, area: 'Biomédica y Química',     color: '#c5e86c' },
-  quim:   { name: 'Lab de Bioreactores',          sign: { x: 760, y: 268 }, area: 'Química y Ambiental',     color: '#86e08a' },
-  robot:  { name: 'Lab AIA',                      sign: { x: 878, y: 216 }, area: 'Industrial y Mecánica',   color: '#ff8a65' },
-  bio:    { name: 'Lab Ingeniería de Tejidos',    sign: { x: 555, y: 164 }, area: 'Biomédica y Datos',       color: '#ff9ecf' },
-  prof:   { name: 'Oficinas de Profesores',       sign: { x: 625, y: 111 }, area: 'Civil y Ambiental',       color: '#e6d36a' },
+  ar:     { name: 'Colivri',                      room: [37, 214],  signY: 452, area: 'Sistemas y Biomédica',    color: '#b89cff' },
+  elec:   { name: 'La Pecera',                    room: [404, 597], signY: 490, area: 'Electrónica y Eléctrica', color: '#ffb347' },
+  mec:    { name: 'Lab de Manufactura',           room: [597, 808], signY: 497, area: 'Mecánica y Civil',        color: '#a9c1d6' },
+  redes:  { name: 'Lab de Redes',                 room: [728, 956], signY: 326, area: 'Sistemas y Electrónica',  color: '#6ec6ff' },
+  biotec: { name: 'Laboratorio de Biotecnología', room: [37, 245],  signY: 268, area: 'Biomédica y Química',     color: '#c5e86c' },
+  quim:   { name: 'Lab de Bioreactores',          room: [728, 988], signY: 268, area: 'Química y Ambiental',     color: '#86e08a' },
+  robot:  { name: 'Lab AIA',                      room: [728, 988], signY: 216, area: 'Industrial y Mecánica',   color: '#ff8a65' },
+  bio:    { name: 'Lab Ingeniería de Tejidos',    room: [422, 727], signY: 164, area: 'Biomédica y Datos',       color: '#ff9ecf' },
+  prof:   { name: 'Oficinas de Profesores',       room: [488, 985], signY: 111, area: 'Civil y Ambiental',       color: '#e6d36a' },
 };
+for (const lab of Object.values(LABS)) lab.x = Math.round((lab.room[0] + lab.room[1]) / 2);
 
 const EVENTS = [
   {
-    id: 1, item: 'AR Goggles', lab: 'ar', x: 120, row: 549,
+    id: 1, item: 'AR Goggles', lab: 'ar', row: 549,
     context: 'El recorrido en realidad aumentada del edificio se ve corrido: las paredes quedan flotando y la gente se marea. Hay demostración esta tarde.',
     question: '¿Qué haces primero?',
     options: [
@@ -70,7 +70,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 2, item: 'Electronics Board', lab: 'elec', x: 460, row: 549,
+    id: 2, item: 'Electronics Board', lab: 'elec', row: 549,
     context: 'Un grupo dejó a medias una alarma que debería sonar cuando alguien abre la puerta. Está armada, pero no suena.',
     question: '¿Qué haces primero?',
     options: [
@@ -82,7 +82,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 3, item: 'Gear & Piston', lab: 'mec', x: 850, row: 549,
+    id: 3, item: 'Gear & Piston', lab: 'mec', row: 549,
     context: 'La máquina grande del lab vibra tanto que deja las piezas torcidas, y riega viruta y aceite por el piso.',
     question: '¿Qué haces primero?',
     options: [
@@ -94,7 +94,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 4, item: 'Network Rack', lab: 'redes', x: 900, row: 369,
+    id: 4, item: 'Network Rack', lab: 'redes', row: 369,
     context: 'El internet del edificio se cae a ratos, justo cuando todos están entregando tareas. En el lab los equipos parpadean raro.',
     question: '¿Qué haces primero?',
     options: [
@@ -106,7 +106,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 5, item: 'Chemistry Flasks', lab: 'quim', x: 760, row: 314,
+    id: 5, item: 'Chemistry Flasks', lab: 'quim', row: 314,
     context: 'Alguien dejó frascos sin marcar sobre la mesa y huele raro. Nadie sabe qué hay adentro y el lab no se puede usar.',
     question: '¿Qué haces primero?',
     options: [
@@ -118,7 +118,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 6, item: 'Robot Arm', lab: 'robot', x: 930, row: 259,
+    id: 6, item: 'Robot Arm', lab: 'robot', row: 259,
     context: 'El brazo robot se detiene a mitad de movimiento y bota las piezas al piso. El grupo que lo usa tiene demostración en dos horas.',
     question: '¿Qué haces primero?',
     options: [
@@ -130,7 +130,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 7, item: 'Microscopio', lab: 'bio', x: 675, row: 207,
+    id: 7, item: 'Microscopio', lab: 'bio', row: 207,
     context: 'Un grupo de investigación tiene cientos de imágenes y muestras guardadas sin ningún orden. Les urge saber qué sirve y qué no.',
     question: '¿Qué haces primero?',
     options: [
@@ -142,7 +142,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 8, item: "Professor's Chalkboard", lab: 'prof', x: 760, row: 155,
+    id: 8, item: "Professor's Chalkboard", lab: 'prof', row: 155,
     context: 'Un profesor no puede trabajar: en la tarde su oficina se vuelve un horno y el aire no circula. Te pide ayuda antes de reportarlo.',
     question: '¿Qué haces primero?',
     options: [
@@ -154,8 +154,9 @@ const EVENTS = [
     ],
   },
 ];
-// each event's room and floor come from the tables above, never typed in twice
-for (const ev of EVENTS) { ev.room = LABS[ev.lab].name; ev.floor = floorName(ev.row); }
+// each event's place, room and floor come from the tables above, never typed in twice: its ! hangs
+// centred on its lab's title
+for (const ev of EVENTS) { ev.x = LABS[ev.lab].x; ev.room = LABS[ev.lab].name; ev.floor = floorName(ev.row); }
 
 // The tree on the roof terrace, top right: once a player has answered all their events, pressing
 // the action button beside it hands over their top 3 careers. The marker sits on the terrace just left of the

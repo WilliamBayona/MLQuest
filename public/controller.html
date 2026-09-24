@@ -371,9 +371,11 @@ function showLift(m) {
 // each one looks here exactly as it does on the big screen.
 const mapImg = new Image(); mapImg.src = 'ML.png';
 function symbolCanvas(w, h, scale, paint) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  // drawn at the phone's real resolution: the signs come out smooth, the pixel art stays crisp
+  const k = scale * (devicePixelRatio || 1);
+  const c = document.createElement('canvas'); c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
   c.style.width = w * scale + 'px'; c.style.height = h * scale + 'px';
-  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
   const go = () => paint(g);
   if (mapImg.complete) go(); else mapImg.addEventListener('load', go, { once: true });
   return c;
