@@ -11,7 +11,9 @@ const WALL_SLIDE = 45, WALL_SLIDE_FAST = 130, WALL_CLIMB = 65;
 const WALL_JUMP_VX = 150, WALL_LOCK = 0.17;
 const DASH_TIME = 0.18, DASH_SPEED = 300, DASH_COOLDOWN = 0.45;
 const DROP_TIME = 0.18, HIT_TIME = 0.5, DEATH_TIME = 1.4;
-const SPAWN = { x: 90, y: 300 };
+// players start (and come back after dying) outside, on the pavement at the building's entrance:
+// the lobby stairs come down to it on the right. Each slot stands a little further along it.
+const SPAWN = { x: 945, y: 500, spread: 14 };
 const STEP = 1 / 60;
 
 const SPRITES = {            // file, frames, fps, loop
@@ -244,7 +246,7 @@ function removePlayer(id) {
 }
 function respawn() {
   Object.assign(P, {
-    x: SPAWN.x + (P.slot % 5) * 22, y: SPAWN.y, vx: 0, vy: 0, face: 1,
+    x: SPAWN.x + (P.slot % 5) * SPAWN.spread, y: SPAWN.y, vx: 0, vy: 0, face: -1,
     ground: false, coyote: 0, jumpBuf: 0, wallDir: 0, grab: false, climbing: false,
     dashT: 0, dropT: 0, dashCd: 0, dashDir: 1, airDash: true, hitT: 0, lockT: 0,
     dead: false, deadT: 0, anim: 'Fall', animT: 0,
