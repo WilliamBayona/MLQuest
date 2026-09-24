@@ -38,104 +38,94 @@
   [data-b=jump] { width:46%; aspect-ratio:1; right:2%; bottom:12%; font-size:clamp(14px,3.5vw,22px); background:#3a5fcd; }
   [data-b=dash] { width:38%; aspect-ratio:1; left:6%; bottom:0; font-size:clamp(12px,3vw,18px); background:#2f8f5b; }
   /* the action button: the colour of the markers it opens, with a pointing hand instead of a word */
-  [data-b=act]  { width:30%; aspect-ratio:1; left:20%; top:0; padding:0; background:var(--mark); display:grid; place-items:center; }
+  [data-b=act]  { width:32%; aspect-ratio:1; left:24%; top:0; padding:0; background:var(--mark); display:grid; place-items:center; }
   [data-b=act] img { width:48%; image-rendering:pixelated; pointer-events:none; }
   [data-b=act].on { background:#e1a400; filter:none; }
   /* standing where it does something: the action button pulses */
   [data-b=act].ready { animation:ready .7s ease-in-out infinite alternate; }
   @keyframes ready { from { box-shadow:inset 0 -5px 0 rgba(0,0,0,.3), 0 4px 0 #000, 0 0 0 0 #fff; }
                      to   { box-shadow:inset 0 -5px 0 rgba(0,0,0,.3), 0 4px 0 #000, 0 0 0 8px #fff; } }
-  [data-b=die]  { width:22%; aspect-ratio:1; right:8%; top:0; font-size:clamp(11px,2.4vw,15px); background:#7a2a3a; }
   /* the action button as it appears inside a sentence */
   .acticon { display:inline-grid; place-items:center; width:1.6em; height:1.6em; vertical-align:middle; border-radius:50%;
              background:var(--mark); border:2px solid #000; margin:0 2px; }
   .acticon img { width:62%; image-rendering:pixelated; }
   /* quiz panel: takes over the whole phone with the controls hidden, drawn in the map's own
      materials — plank walls, cream boards, black outlines, grey slabs and the yellow of the markers.
-     The lift and the onboarding use this same panel. */
+     The lift and the onboarding use this same panel. It never scrolls: every size in it is in em, so
+     fitPanel() can shrink the panel's one font size until whatever it shows fits the screen. */
   body.quizzing .pad, body.quizzing .status { display:none; }
-  #quiz { --pl:max(14px, env(safe-area-inset-left)); --pr:max(14px, env(safe-area-inset-right));
-          position:fixed; inset:0; z-index:12; color:var(--ink); display:none; flex-direction:column;
-          background:var(--planks);
-          padding:0 var(--pr) max(10px, env(safe-area-inset-bottom)) var(--pl); }
+  #quiz { --pl:max(12px, env(safe-area-inset-left)); --pr:max(12px, env(safe-area-inset-right));
+          position:fixed; inset:0; z-index:12; color:var(--ink); display:none; flex-direction:column; overflow:hidden;
+          font-size:clamp(10px, min(4.2vh, 2.3vw), 16px); background:var(--planks);
+          padding:0 var(--pr) max(.6em, env(safe-area-inset-bottom)) var(--pl); }
   #quiz.on { display:flex; }
   /* header: a grey floor slab across the top */
-  #quiz header { display:flex; align-items:center; gap:10px; flex:0 0 auto; margin:0 calc(-1 * var(--pr)) 0 calc(-1 * var(--pl));
-                 padding:max(6px, env(safe-area-inset-top)) var(--pr) 6px var(--pl); background:var(--slab); color:var(--cream);
-                 border-bottom:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a; }
-  #quiz h1 { margin:0; font-size:14px; color:var(--mark); text-shadow:2px 2px 0 #000; }
-  #quiz .floor { font-size:12px; opacity:.85; }
-  #quiz .badge { margin-left:auto; font-size:13px; font-weight:700; background:#000; color:var(--mark); padding:2px 8px; }
+  #quiz header { display:flex; align-items:center; gap:.7em; flex:0 0 auto; margin:0 calc(-1 * var(--pr)) 0 calc(-1 * var(--pl));
+                 padding:max(.4em, env(safe-area-inset-top)) var(--pr) .4em var(--pl); background:var(--slab); color:var(--cream);
+                 border-bottom:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a; white-space:nowrap; }
+  #quiz h1 { margin:0; font-size:1.08em; color:var(--mark); text-shadow:2px 2px 0 #000; overflow:hidden; text-overflow:ellipsis; }
+  #quiz .floor { font-size:.92em; opacity:.85; overflow:hidden; text-overflow:ellipsis; }
+  #quiz .badge { margin-left:auto; font-weight:700; background:#000; color:var(--mark); padding:.15em .6em; }
   #quiz .badge:empty { display:none; }
-  #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:8px; }
-  #quiz .body.ask { display:flex; flex-direction:column; gap:8px; }
-  /* the question box: a cream board that fills the free space but never shrinks below its text; on a
-     short screen the whole panel scrolls instead, so nothing is ever cut off */
-  #quiz .stem { flex:1 0 auto; display:flex; text-align:center;
-                background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--wood), 4px 4px 0 rgba(0,0,0,.3); padding:6px 16px; }
+  #quiz .body { flex:1 1 auto; min-height:0; overflow:hidden; margin-top:.6em; display:flex; flex-direction:column; }
+  #quiz .body > * { flex:0 0 auto; }
+  #quiz .body.ask { gap:.6em; }
+  /* the question box: a cream board that takes the free space above the answers */
+  #quiz .body.ask .stem { flex:1 0 auto; }
+  #quiz .stem { display:flex; text-align:center;
+                background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--wood), 4px 4px 0 rgba(0,0,0,.3); padding:.45em 1.2em; }
   #quiz .stem > div { margin:auto; }
-  #quiz .ctx { font-size:clamp(11px, 2.1vw, 14px); line-height:1.35; margin:0 0 4px; }
-  #quiz .q { font-size:clamp(12px, 2.4vw, 16px); font-weight:700; margin:0; }
+  #quiz .ctx { line-height:1.35; margin:0 0 .3em; }
+  #quiz .q { font-size:1.1em; font-weight:700; margin:0; }
   /* answers: 2x2, and a fifth one centred underneath */
-  #quiz .opts { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; }
-  #quiz .opts button { display:flex; gap:8px; align-items:center; text-align:left; min-height:46px; padding:5px 10px 9px 6px;
-                       font-size:clamp(11px, 2vw, 14px); line-height:1.25; font-weight:600; color:var(--ink);
+  #quiz .opts { display:grid; grid-template-columns:1fr 1fr; gap:.45em .75em; }
+  #quiz .opts button { display:flex; gap:.6em; align-items:center; text-align:left; min-height:3.3em; padding:.35em .75em .65em .45em;
+                       font-size:.95em; line-height:1.25; font-weight:600; color:var(--ink);
                        background:var(--cream); border:3px solid #000; border-radius:0; box-shadow:inset 0 -5px 0 var(--brown), 3px 3px 0 rgba(0,0,0,.3); }
-  #quiz .opts button:nth-child(5) { grid-column:1 / -1; justify-self:center; width:calc(50% - 5px); }
+  #quiz .opts button:nth-child(5) { grid-column:1 / -1; justify-self:center; width:calc(50% - .375em); }
   /* the letter is a little copy of the ! marker */
-  #quiz .opts button .k { flex:0 0 auto; display:grid; place-items:center; width:22px; height:22px; background:var(--mark); color:#000; border:2px solid #000; font-weight:800; }
+  #quiz .opts button .k { flex:0 0 auto; display:grid; place-items:center; width:1.7em; height:1.7em; background:var(--mark); color:#000; border:2px solid #000; font-weight:800; }
   #quiz .opts button.pick { background:var(--mark); box-shadow:inset 0 -5px 0 #d99a00, 3px 3px 0 rgba(0,0,0,.3); transform:translateY(2px); }
   #quiz .opts button.pick .k { background:#000; color:var(--mark); }
-  #quiz .note { margin:12px auto 0; max-width:560px; font-size:13px; line-height:1.5; text-align:center; background:var(--cream); border:3px solid #000; padding:10px 12px; }
-  #quiz .rank { display:grid; gap:8px; margin:6px auto 0; max-width:560px; }
-  #quiz .rank div { display:flex; align-items:center; gap:10px; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown); padding:8px 12px 10px; font-size:14px; }
+  #quiz .note { margin:.9em auto 0; max-width:43em; line-height:1.5; text-align:center; background:var(--cream); border:3px solid #000; padding:.75em .9em; }
+  #quiz .rank { display:grid; gap:.6em; margin:.45em auto 0; width:min(43em, 100%); }
+  #quiz .rank div { display:flex; align-items:center; gap:.75em; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown); padding:.55em .9em .75em; font-size:1.08em; }
   #quiz .rank b { flex:1; }
-  #quiz .rank .pos { display:grid; place-items:center; width:24px; height:24px; background:var(--mark); border:2px solid #000; font-weight:800; }
-  #quiz .close { display:block; margin:10px auto 0; padding:8px 28px; font-size:14px; border-radius:0; color:var(--cream); background:var(--slab); border:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a, 3px 3px 0 rgba(0,0,0,.3); }
-  #quiz .nav { display:flex; justify-content:center; gap:10px; }
-  #quiz .nav .close { margin:10px 0 0; }
+  #quiz .rank .pos { display:grid; place-items:center; width:1.7em; height:1.7em; background:var(--mark); border:2px solid #000; font-weight:800; }
+  #quiz .close { display:block; margin:.75em auto 0; padding:.55em 2.1em; font-size:1.08em; border-radius:0; color:var(--cream); background:var(--slab); border:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a, 3px 3px 0 rgba(0,0,0,.3); }
+  #quiz .nav { display:flex; justify-content:center; gap:.75em; }
+  #quiz .nav .close { margin:.75em 0 0; }
   #quiz .nav .close.go { background:var(--mark); color:#000; box-shadow:inset 0 -4px 0 #d99a00, 3px 3px 0 rgba(0,0,0,.3); }
   /* the lift's floor panel: black buttons with yellow numbers, like the display over every lift door */
-  #quiz .lift { display:grid; grid-template-columns:repeat(4, 56px); gap:10px; justify-content:center; margin:4px auto 0; padding:12px 16px;
-                width:max-content; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown), 4px 4px 0 rgba(0,0,0,.3); }
-  #quiz .lift button { height:48px; border-radius:50%; background:#000; color:var(--mark); font-size:20px; border-color:#555; box-shadow:0 3px 0 #555; }
+  #quiz .lift { display:grid; grid-template-columns:repeat(4, 4.3em); gap:.75em; justify-content:center; margin:.3em auto 0; padding:.9em 1.2em;
+                background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown), 4px 4px 0 rgba(0,0,0,.3); }
+  #quiz .lift button { height:3.1em; border-radius:50%; background:#000; color:var(--mark); font-size:1.4em; padding:0; border-color:#555; box-shadow:0 3px 0 #555; }
   #quiz .lift button.here { background:var(--mark); color:#000; border-color:#000; box-shadow:none; }
   /* onboarding: the map's symbols, each drawn exactly as on the big screen, with what it means */
-  #quiz .legend { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; max-width:900px; margin:0 auto; }
-  #quiz .legend > div { display:flex; align-items:center; gap:10px; background:var(--cream); border:3px solid #000;
-                        box-shadow:inset 0 -4px 0 var(--brown); padding:6px 8px 9px; font-size:11px; line-height:1.3; }
-  #quiz .legend .sym { flex:0 0 64px; height:56px; display:grid; place-items:center; }
-  #quiz .legend canvas, #quiz .legend .mini { image-rendering:pixelated; }
-  #quiz .legend b { display:block; font-size:12px; margin-bottom:1px; }
-  #quiz .legend .mini { width:32px; height:32px; background:url(sprites/Idle.png) 0 0 / 128px 32px no-repeat; animation:idle2 .67s steps(4) infinite; }
-  @keyframes idle2 { to { background-position:-128px 0; } }
-  #quiz .legend .tag { font-weight:800; font-size:12px; text-shadow:1px 1px 0 #000; text-align:center; }
-  #quiz .keys { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; max-width:900px; margin:0 auto; }
-  #quiz .keys > div { display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; background:var(--cream); border:3px solid #000;
-                      box-shadow:inset 0 -4px 0 var(--brown); padding:8px 6px 10px; font-size:11px; line-height:1.3; }
-  #quiz .keys .k2 { display:grid; place-items:center; height:40px; min-width:40px; padding:0 6px; border:3px solid #000; border-radius:50%; color:#fff; font-weight:800; font-size:10px; text-shadow:1px 1px 0 #000; }
-  #quiz .keys .lrk { border-radius:0; background:var(--cream); color:var(--ink); text-shadow:none; font-size:14px; padding:0; display:flex; }
-  #quiz .keys .lrk span { padding:6px 8px; } #quiz .keys .lrk span + span { border-left:3px solid #000; }
-  #quiz .steps { max-width:640px; margin:0 auto; padding:8px 14px 8px 34px; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown);
-                 font-size:13px; line-height:1.55; }
-  @media (max-height:340px) {
-    #quiz header { padding-top:max(3px, env(safe-area-inset-top)); padding-bottom:3px; }
-    #quiz h1, #quiz .badge { font-size:12px; }
-    #quiz .body { margin-top:5px; }
-    #quiz .body.ask, #quiz .opts { gap:5px 8px; }
-    #quiz .stem { padding:4px 12px; }
-    #quiz .ctx { font-size:11px; }
-    #quiz .q { font-size:12px; }
-    #quiz .opts button { min-height:38px; font-size:11px; padding:3px 8px 7px 5px; }
-    #quiz .legend .sym { height:44px; }
-  }
+  #quiz .legend { display:grid; grid-template-columns:repeat(3, 1fr); gap:.6em; width:min(69em, 100%); margin:0 auto; }
+  #quiz .legend > div { display:flex; align-items:center; gap:.75em; background:var(--cream); border:3px solid #000;
+                        box-shadow:inset 0 -4px 0 var(--brown); padding:.45em .6em .7em; font-size:.85em; line-height:1.3; }
+  #quiz .legend .sym { flex:0 0 5.8em; height:5em; display:grid; place-items:center; }
+  #quiz .legend b { display:block; font-size:1.1em; margin-bottom:.1em; }
+  #quiz .legend .mini { width:3em; height:3em; background:url(sprites/Idle.png) 0 0 / 400% 100% no-repeat; image-rendering:pixelated; animation:idle2 .67s steps(4) infinite; }
+  @keyframes idle2 { to { background-position:133.33% 0; } }
+  #quiz .legend .tag { font-weight:800; text-shadow:1px 1px 0 #000; text-align:center; }
+  #quiz .keys { display:grid; grid-template-columns:repeat(4, 1fr); gap:.6em; width:min(56em, 100%); margin:0 auto; }
+  #quiz .keys > div { display:flex; flex-direction:column; align-items:center; gap:.45em; text-align:center; background:var(--cream); border:3px solid #000;
+                      box-shadow:inset 0 -4px 0 var(--brown); padding:.6em .45em .75em; font-size:.85em; line-height:1.3; }
+  #quiz .keys .k2 { display:grid; place-items:center; height:3.6em; min-width:3.6em; padding:0 .45em; border:3px solid #000; border-radius:50%; color:#fff; font-weight:800; font-size:.9em; text-shadow:1px 1px 0 #000; }
+  #quiz .keys .k2 img { width:1.8em; image-rendering:pixelated; }
+  #quiz .keys .lrk { border-radius:0; background:var(--cream); color:var(--ink); text-shadow:none; font-size:1.2em; padding:0; display:flex; }
+  #quiz .keys .lrk span { padding:.4em .55em; } #quiz .keys .lrk span + span { border-left:3px solid #000; }
+  #quiz .steps { width:min(49em, 100%); margin:0 auto; padding:.6em 1.1em .6em 2.6em; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown);
+                 line-height:1.5; }
   /* character preview: every phone gets a different colour, so show the student which one is theirs */
-  .me { justify-self:center; visibility:hidden; display:flex; flex-direction:column; align-items:center; gap:4px;
+  .me { justify-self:center; visibility:hidden; display:flex; flex-direction:column; align-items:center; gap:4px; --sp:min(64px, 17vh);
         pointer-events:none; font-size:11px; font-weight:700; }
   .me.on { visibility:visible; }
   .me .frame { padding:6px 8px 4px; background:#f3ead2; border:3px solid #000; box-shadow:inset 0 -4px 0 #debc8b; }
-  .me .sprite { width:64px; height:64px; background:url(sprites/Idle.png) 0 0 / 256px 64px no-repeat; image-rendering:pixelated; animation:idle .67s steps(4) infinite; }
-  @keyframes idle { to { background-position:-256px 0; } }
+  .me .sprite { width:var(--sp); height:var(--sp); background:url(sprites/Idle.png) 0 0 / 400% 100% no-repeat; image-rendering:pixelated; animation:idle .67s steps(4) infinite; }
+  @keyframes idle { to { background-position:133.33% 0; } }
   .me b { font-size:14px; text-shadow:2px 2px 0 #000; }
   .rotate { display:none; position:fixed; inset:0; background:var(--planks); font-weight:700; z-index:9; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:18px; }
   @media (orientation:portrait) { .rotate { display:flex; } }
@@ -151,7 +141,6 @@
   <div class="me" id="me"><span>Tu personaje</span><div class="frame"><div class="sprite" id="meSprite"></div></div><b id="meTag"></b></div>
   <div class="acts">
     <button data-b="act" aria-label="Interactuar"><img id="actImg" alt=""></button>
-    <button data-b="die">MORIR</button>
     <button data-b="dash">DASH</button>
     <button data-b="jump">SALTO</button>
   </div>
@@ -216,7 +205,8 @@ function connect() {
     if (m.t === 'hello') {
       slot = m.slot; document.title = `ML Quest · J${slot}`; progress = null; showCharacter();
       if (panel !== 'intro') closeQuiz();   // a fresh connection: whatever the game had open is gone
-      if (!store.get('mlquest-intro')) showIntro(0);
+      // first time on this phone: the onboarding, once (a reconnect must not send it back to page 1)
+      if (!store.get('mlquest-intro') && panel !== 'intro') showIntro(0);
     }
     if (m.t === 'ask') showQuestion(m);
     else if (m.t === 'saved') showSaved(m);
@@ -276,7 +266,18 @@ function openQuiz(kind) {
   panel = kind;
   quiz.classList.add('on');
   document.body.classList.add('quizzing');
+  fitPanel();
 }
+// Nothing on the phone scrolls: if what the panel shows does not fit the screen, shrink the panel's
+// font size (every size in it is in em) until it does.
+function fitPanel() {
+  if (!quiz.classList.contains('on')) return;
+  quiz.style.fontSize = '';
+  let fs = parseFloat(getComputedStyle(quiz).fontSize);
+  const over = () => qBody.scrollHeight > qBody.clientHeight + 1 || qBody.scrollWidth > qBody.clientWidth + 1;
+  while (over() && fs > 7) { fs -= 0.5; quiz.style.fontSize = fs + 'px'; }
+}
+addEventListener('resize', fitPanel);
 function closeQuiz() {
   panel = null;
   quiz.classList.remove('on');
@@ -374,7 +375,8 @@ function symbolCanvas(w, h, scale, paint) {
   // drawn at the phone's real resolution: the signs come out smooth, the pixel art stays crisp
   const k = scale * (devicePixelRatio || 1);
   const c = document.createElement('canvas'); c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
-  c.style.width = w * scale + 'px'; c.style.height = h * scale + 'px';
+  // sized in em (13px = 1em as drawn), so the symbols shrink with the panel when it has to fit
+  c.style.width = w * scale / 13 + 'em'; c.style.height = h * scale / 13 + 'em';
   const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
   const go = () => paint(g);
   if (mapImg.complete) go(); else mapImg.addEventListener('load', go, { once: true });
@@ -399,9 +401,9 @@ function mapSymbols() {
   return [
     legendItem(symbolCanvas(16, 18, 3, (g) => drawBang(g, 8, 16)), 'Evento',
       'Párate debajo y oprime {act} para responder su pregunta.'),
-    legendItem(symbolCanvas(labSignWidth(document.createElement('canvas').getContext('2d'), firstLab) + 2, 13, 2, (g) => drawLabSign(g, (labSignWidth(g, firstLab) + 2) / 2, 1, firstLab)), 'Laboratorio',
+    legendItem(symbolCanvas(labSignWidth(document.createElement('canvas').getContext('2d'), firstLab) + 2, 13, 1.5, (g) => drawLabSign(g, (labSignWidth(g, firstLab) + 2) / 2, 1, firstLab)), 'Laboratorio',
       'El letrero de color dice qué laboratorio es.'),
-    legendItem(symbolCanvas(dw, dh + 13, 2, (g) => { drawFloorTag(g, LIFT.x - door.x0, 0, 2); g.drawImage(mapImg, door.x0, liftRow + door.top, dw, dh, 0, 13, dw, dh); }), 'Ascensor',
+    legendItem(symbolCanvas(dw, dh + 13, 1.5, (g) => { drawFloorTag(g, LIFT.x - door.x0, 0, 2); g.drawImage(mapImg, door.x0, liftRow + door.top, dw, dh, 0, 13, dw, dh); }), 'Ascensor',
       `Frente a sus puertas oprime {act} y elige un piso del 1 al ${TOP_FLOOR}.`),
     legendItem(symbolCanvas(13, 12, 3, (g) => drawFloorTag(g, 6, 1, 3)), 'Número de piso',
       `Sobre cada ascensor. Los pisos van del 1 al ${TOP_FLOOR}.`),
@@ -418,11 +420,10 @@ function controlKeys() {
     return d;
   };
   const act = key('', '#ffd23f', 'Interactuar: eventos, ascensor y árbol');
-  act.firstChild.appendChild(Object.assign(document.createElement('img'), { src: HAND_URL, style: 'width:20px;image-rendering:pixelated' }));
+  act.firstChild.appendChild(Object.assign(document.createElement('img'), { src: HAND_URL, alt: '' }));
   const lr = key('<span>◀</span><span>▶</span>', '', 'Moverte a los lados');
   lr.firstChild.classList.add('lrk');
-  return [lr, key('SALTO', '#3a5fcd', 'Saltar escalones y muebles'), key('DASH', '#2f8f5b', 'Impulso rápido'), act,
-    key('MORIR', '#7a2a3a', 'Vuelves al inicio; tus respuestas se guardan')];
+  return [lr, key('SALTO', '#3a5fcd', 'Saltar escalones y muebles'), key('DASH', '#2f8f5b', 'Impulso rápido'), act];
 }
 const INTRO = [
   { title: 'Símbolos del mapa', body: () => { const g = document.createElement('div'); g.className = 'legend'; g.append(...mapSymbols()); return g; } },
@@ -462,8 +463,8 @@ for (const btn of document.querySelectorAll('button[data-b]')) {
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, () => set(false));
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
 }
-// block page scrolling, except inside the quiz panel, where long questions need to scroll
-document.addEventListener('touchmove', (e) => { if (!quiz.contains(e.target)) e.preventDefault(); }, { passive: false });
+// nothing on the phone scrolls or pans: the panels are sized to fit the screen instead
+document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 addEventListener('blur', () => { for (const k in state) state[k] = false; document.querySelectorAll('.on').forEach((b) => b.classList.remove('on')); send(); });
 connect();
