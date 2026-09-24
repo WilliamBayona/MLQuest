@@ -221,6 +221,7 @@ function addPlayer(id, slot) {
   const p = { id, slot, input: {}, latch: {}, score: {}, events: pickEvents(), done: new Set(), asking: null, askT: 0, near: null };
   players.set(id, p);
   const prev = P; P = p; respawn(); P = prev;
+  sendProgress(p);
   updateStatus();
   return p;
 }
@@ -435,10 +436,12 @@ function answerEvent(p, choice) {
   for (const [k, v] of Object.entries(ev.options[choice].s)) p.score[k] = (p.score[k] || 0) + v;
   p.done.add(ev.id);
   closeAsk(p);
+  sendProgress(p);
   if (finished(p)) sendResult(p);
   else toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS_PER_PLAYER });
-  updateStatus();
 }
+// how far along a player is goes to their own phone only, never onto the shared screen
+function sendProgress(p) { toPhone(p.id, { t: 'progress', collected: p.done.size, total: EVENTS_PER_PLAYER }); }
 function sendResult(p) {
   const res = {
     t: 'result', collected: p.done.size, total: EVENTS_PER_PLAYER,
@@ -474,7 +477,7 @@ function drawMarkers(t) {
   for (const ev of EVENTS) {
     const owners = [...players.values()].filter((p) => p.events.has(ev.id) && !p.done.has(ev.id));
     const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
-    drawBang(ev.x, by, owners.length || !players.size ? '#ffd23f' : '#5c5c5c');
+    drawBang(ev.x, by, '#ffd23f');   // always lit: the screen is shared, so a marker never goes out for everyone
     // one pip per player who still has this event to answer, in their tag colour
     const x0 = Math.round(ev.x - (owners.length * 6 - 1) / 2);
     owners.forEach((p, i) => {
@@ -506,7 +509,7 @@ addEventListener('keydown', (e) => {
 // ---------- render ----------
 let bg; const sheets = {};
 const tinted = new Map();      // slot -> { anim: canvas }, hue-rotated copies of the sprite sheets
-const HUES = [0, 200, 100, 290];
+const HUES = [0, 200, 100, 290];            // controller.html repeats these two lists for its character preview
 const hueFor = (slot) => (slot === 0 ? 60 : HUES[(slot - 1) % HUES.length]);
 const LABEL_COLORS = ['#e16714', '#4aa3ff', '#5fd068', '#c76bff'];
 const tagColor = (p) => (p.slot === 0 ? '#c9b400' : LABEL_COLORS[(p.slot - 1) % LABEL_COLORS.length]);
@@ -586,8 +589,6 @@ function updateStatus() {
   const phones = [...players.values()].filter((p) => p.id !== 'kb').length;
   dot.classList.toggle('on', phones > 0);
   txt.textContent = !connected ? 'desconectado, reintentando…' : phones ? `${phones} control${phones > 1 ? 'es' : ''} conectado${phones > 1 ? 's' : ''}` : 'servidor ok · esperando control';
-  const bar = document.getElementById('progress');
-  if (bar) bar.textContent = [...players.values()].map((p) => `${p.id === 'kb' ? 'KB' : 'P' + p.slot}: ${p.done.size}/${EVENTS_PER_PLAYER}`).join(' · ');
 }
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=game`);

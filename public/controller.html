@@ -47,9 +47,10 @@
   #quiz .clock { margin-left:auto; font-size:13px; font-weight:700; background:#000; color:var(--mark); padding:2px 8px; }
   #quiz .clock.low { color:#ff6a4d; }
   #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:8px; }
-  #quiz .body.ask { display:flex; flex-direction:column; gap:8px; overflow:hidden; }
-  /* the question box: a cream board that shrinks and scrolls on its own so the answers always stay on screen */
-  #quiz .stem { flex:1 1 auto; min-height:0; display:flex; overflow-y:auto; touch-action:pan-y; text-align:center;
+  #quiz .body.ask { display:flex; flex-direction:column; gap:8px; }
+  /* the question box: a cream board that fills the free space but never shrinks below its text; on a
+     short screen the whole panel scrolls instead, so nothing is ever cut off */
+  #quiz .stem { flex:1 0 auto; display:flex; text-align:center;
                 background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--wood), 4px 4px 0 rgba(0,0,0,.3); padding:6px 16px; }
   #quiz .stem > div { margin:auto; }
   #quiz .ctx { font-size:clamp(11px, 2.1vw, 14px); line-height:1.35; margin:0 0 4px; }
@@ -70,6 +71,25 @@
   #quiz .rank b { flex:1; }
   #quiz .rank .pos { display:grid; place-items:center; width:24px; height:24px; background:var(--mark); border:2px solid #000; font-weight:800; }
   #quiz .close { display:block; margin:10px auto 0; padding:8px 28px; font-size:14px; border-radius:0; color:var(--cream); background:var(--slab); border:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a, 3px 3px 0 rgba(0,0,0,.3); }
+  @media (max-height:340px) {
+    #quiz header { padding-top:max(3px, env(safe-area-inset-top)); padding-bottom:3px; }
+    #quiz h1, #quiz .clock { font-size:12px; }
+    #quiz .body { margin-top:5px; }
+    #quiz .body.ask, #quiz .opts { gap:5px 8px; }
+    #quiz .stem { padding:4px 12px; }
+    #quiz .ctx { font-size:11px; }
+    #quiz .q { font-size:12px; }
+    #quiz .opts button { min-height:38px; font-size:11px; padding:3px 8px 7px 5px; }
+  }
+  /* character preview: every phone gets a different colour, so show the student which one is theirs */
+  .me { position:fixed; left:50%; top:50%; transform:translate(-50%, -50%); display:none; flex-direction:column; align-items:center; gap:4px;
+        pointer-events:none; font-size:11px; }
+  .me.on { display:flex; }
+  .me .frame { padding:6px 8px 4px; background:#f3ead2; border:3px solid #000; box-shadow:inset 0 -4px 0 #debc8b; }
+  .me .sprite { width:64px; height:64px; background:url(sprites/Idle.png) 0 0 / 256px 64px no-repeat; image-rendering:pixelated; animation:idle .67s steps(4) infinite; }
+  @keyframes idle { to { background-position:-256px 0; } }
+  .me b { font-size:14px; text-shadow:2px 2px 0 #000; }
+  body.quizzing .me { display:none; }
   .rotate { display:none; position:fixed; inset:0; background:var(--bg); z-index:9; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:18px; }
   @media (orientation:portrait) { .rotate { display:flex; } }
 </style>
@@ -87,6 +107,7 @@
     <button data-b="jump">SALTO</button>
   </div>
 </div>
+<div class="me" id="me"><span>Tu personaje</span><div class="frame"><div class="sprite" id="meSprite"></div></div><b id="meTag"></b></div>
 <div id="quiz">
   <header><h1 id="qRoom"></h1><span class="floor" id="qFloor"></span><span class="clock" id="qClock"></span></header>
   <div class="body" id="qBody"></div>
@@ -95,8 +116,26 @@
 <script>
 'use strict';
 const state = {};
-let ws, slot = '?', games = 0;
+let ws, slot = '?', games = 0, progress = null;
 const dot = document.getElementById('dot'), txt = document.getElementById('txt');
+
+// the same tint and tag colour the game gives this slot (HUES / LABEL_COLORS in game.js); CSS
+// hue-rotate is the very colour matrix the game applies to the sprite sheets
+const HUES = [0, 200, 100, 290];
+const LABEL_COLORS = ['#e16714', '#4aa3ff', '#5fd068', '#c76bff'];
+function showCharacter() {
+  const i = (slot - 1) % HUES.length;
+  document.getElementById('meSprite').style.filter = HUES[i] ? `hue-rotate(${HUES[i]}deg)` : '';
+  const tag = document.getElementById('meTag');
+  tag.textContent = 'P' + slot;
+  tag.style.color = LABEL_COLORS[(slot - 1) % LABEL_COLORS.length];
+  document.getElementById('me').classList.add('on');
+}
+function showStatus() {
+  dot.classList.toggle('on', games > 0);
+  txt.textContent = games === 0 ? `Jugador ${slot} · sin pantalla de juego`
+    : progress ? `Jugador ${slot} · ${progress.collected}/${progress.total} eventos` : `Jugador ${slot} · jugando`;
+}
 
 function send() {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'input', s: { ...state } }));
@@ -106,16 +145,16 @@ function connect() {
   ws.onopen = () => { txt.textContent = 'conectado'; send(); };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.t === 'hello') { slot = m.slot; document.title = `ML Quest · J${slot}`; }
+    if (m.t === 'hello') { slot = m.slot; document.title = `ML Quest · J${slot}`; progress = null; showCharacter(); }
     if (m.t === 'ask') showQuestion(m);
     else if (m.t === 'saved') showSaved(m);
     else if (m.t === 'result') showResult(m);
     else if (m.t === 'close') closeQuiz();
     else if (m.t === 'near') actBtn.classList.toggle('ready', !!m.on);
+    else if (m.t === 'progress') { progress = m; showStatus(); }
     if (m.t === 'hello' || m.t === 'status') {
       if (m.games !== undefined) games = m.games;
-      dot.classList.toggle('on', games > 0);
-      txt.textContent = games > 0 ? `Jugador ${slot} · jugando` : `Jugador ${slot} · sin pantalla de juego`;
+      showStatus();
     }
   };
   ws.onclose = () => { dot.classList.remove('on'); txt.textContent = 'reconectando…'; setTimeout(connect, 800); };
