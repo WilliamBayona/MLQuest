@@ -1,8 +1,9 @@
 'use strict';
 
-// The aptitude test from eventos-test-orientacion-ml.md, placed on the building.
-// `x` and `row` say where each room's marker floats: row is the collision row of that floor,
-// which is also what the player's feet rest on.
+// The aptitude test from eventos-test-orientacion-ml.md, placed on the building, plus everything
+// else about the building the game and the phones need to agree on: its floors, its lift, its labs.
+// `x` and `row` say where things stand: row is the collision row of a floor, which is also what the
+// player's feet rest on.
 const CAREERS = {
   SIS: 'Ingeniería de Sistemas',
   ELN: 'Ingeniería Electrónica',
@@ -18,9 +19,42 @@ const CAREERS = {
 
 const EVENTS_PER_PLAYER = 4;   // each player answers this many rooms, then collects the result at the tree
 
+// The floors, numbered as the lift and every screen show them. The map has one more level, the
+// big hall at row 423, but the lift has no door there, so it is a mezzanine and gets no number.
+const FLOORS = [
+  { n: 1, row: 549 },
+  { n: 2, row: 479 },
+  { n: 3, row: 369 },
+  { n: 4, row: 314 },
+  { n: 5, row: 259 },
+  { n: 6, row: 207 },
+  { n: 7, row: 155 },
+  { n: 8, row: 102 },
+];
+const TOP_FLOOR = FLOORS[FLOORS.length - 1].n;
+const floorAt = (row) => FLOORS.find((f) => f.row === row);
+const floorName = (row) => { const f = floorAt(row); return f ? `Piso ${f.n}` : 'Entrepiso'; };
+
+// The lift: one shaft of doors at x, one stop per floor. Floor 1 has no door drawn in the art, so
+// the game paints one there, copied from the door of `doorFrom` (door = its box, relative to row).
+const LIFT = { x: 386, door: { x0: 372, x1: 404, top: -27, bottom: -5 }, doorFrom: 479 };
+
+// The labs, by key. Change a name, a sign or a colour here and the map, the phones and the
+// onboarding all follow. `short` is the sign on the map; `area` the engineering it is about.
+const LABS = {
+  ar:    { name: 'Laboratorio de Realidad Aumentada',  short: 'RA-LAB',    area: 'Sistemas y Biomédica',    color: '#b89cff' },
+  elec:  { name: 'Laboratorio de Circuitos Electrónicos', short: 'CIRCUITOS', area: 'Electrónica y Eléctrica', color: '#ffb347' },
+  mec:   { name: 'Taller de Mecánica y Manufactura',   short: 'MECÁNICA',  area: 'Mecánica y Civil',        color: '#a9c1d6' },
+  redes: { name: 'Laboratorio de Redes y Telecomunicaciones', short: 'REDES', area: 'Sistemas y Electrónica', color: '#6ec6ff' },
+  quim:  { name: 'Laboratorio de Química y Procesos',  short: 'QUÍMICA',   area: 'Química y Ambiental',     color: '#86e08a' },
+  robot: { name: 'Laboratorio de Robótica Industrial', short: 'ROBÓTICA',  area: 'Industrial y Mecánica',   color: '#ff8a65' },
+  bio:   { name: 'Laboratorio de Ingeniería Biomédica', short: 'BIOMÉDICA', area: 'Biomédica y Datos',      color: '#ff9ecf' },
+  prof:  { name: 'Oficinas de Profesores',             short: 'PROFES',    area: 'Civil y Ambiental',       color: '#e6d36a' },
+};
+
 const EVENTS = [
   {
-    id: 1, item: 'AR Goggles', room: 'Sala de Realidad Aumentada', floor: 'Piso 0', x: 120, row: 549,
+    id: 1, item: 'AR Goggles', lab: 'ar', x: 120, row: 549,
     context: 'El recorrido en realidad aumentada del edificio se ve corrido: las paredes quedan flotando y la gente se marea. Hay demostración esta tarde.',
     question: '¿Qué haces primero?',
     options: [
@@ -32,7 +66,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 2, item: 'Electronics Board', room: 'Sala de Mesas de Electrónica', floor: 'Piso 0', x: 460, row: 549,
+    id: 2, item: 'Electronics Board', lab: 'elec', x: 460, row: 549,
     context: 'Un grupo dejó a medias una alarma que debería sonar cuando alguien abre la puerta. Está armada, pero no suena.',
     question: '¿Qué haces primero?',
     options: [
@@ -44,7 +78,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 3, item: 'Gear & Piston', room: 'Lab de Mecánica', floor: 'Piso 0', x: 850, row: 549,
+    id: 3, item: 'Gear & Piston', lab: 'mec', x: 850, row: 549,
     context: 'La máquina grande del lab vibra tanto que deja las piezas torcidas, y riega viruta y aceite por el piso.',
     question: '¿Qué haces primero?',
     options: [
@@ -56,7 +90,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 4, item: 'Network Rack', room: 'Lab de Redes', floor: 'Piso 3', x: 900, row: 369,
+    id: 4, item: 'Network Rack', lab: 'redes', x: 900, row: 369,
     context: 'El internet del edificio se cae a ratos, justo cuando todos están entregando tareas. En el lab los equipos parpadean raro.',
     question: '¿Qué haces primero?',
     options: [
@@ -68,7 +102,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 5, item: 'Chemistry Flasks', room: 'Labs de Química', floor: 'Piso 4', x: 760, row: 314,
+    id: 5, item: 'Chemistry Flasks', lab: 'quim', x: 760, row: 314,
     context: 'Alguien dejó frascos sin marcar sobre la mesa y huele raro. Nadie sabe qué hay adentro y el lab no se puede usar.',
     question: '¿Qué haces primero?',
     options: [
@@ -80,7 +114,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 6, item: 'Robot Arm', room: 'Sala Industrial con Brazo Robot', floor: 'Piso 5', x: 930, row: 259,
+    id: 6, item: 'Robot Arm', lab: 'robot', x: 930, row: 259,
     context: 'El brazo robot se detiene a mitad de movimiento y bota las piezas al piso. El grupo que lo usa tiene demostración en dos horas.',
     question: '¿Qué haces primero?',
     options: [
@@ -92,7 +126,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 7, item: 'Microscopio Biomédico', room: 'Sala de Ingeniería Biomédica', floor: 'Piso 6', x: 420, row: 207,
+    id: 7, item: 'Microscopio Biomédico', lab: 'bio', x: 420, row: 207,
     context: 'Un grupo de investigación tiene cientos de imágenes y muestras guardadas sin ningún orden. Les urge saber qué sirve y qué no.',
     question: '¿Qué haces primero?',
     options: [
@@ -104,7 +138,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 8, item: "Professor's Chalkboard", room: 'Oficinas de Profesores', floor: 'Piso 8', x: 500, row: 102,
+    id: 8, item: "Professor's Chalkboard", lab: 'prof', x: 500, row: 102,
     context: 'Un profesor no puede trabajar: en la tarde su oficina se vuelve un horno y el aire no circula. Te pide ayuda antes de reportarlo.',
     question: '¿Qué haces primero?',
     options: [
@@ -116,13 +150,16 @@ const EVENTS = [
     ],
   },
 ];
+// each event's room and floor come from the tables above, never typed in twice
+for (const ev of EVENTS) { ev.room = LABS[ev.lab].name; ev.floor = floorName(ev.row); }
 
 // The tree on the roof terrace, top right: once a player has answered all their events, pressing
-// ACCIÓN beside it hands over their top 3 careers. The marker sits on the terrace just left of the
+// the action button beside it hands over their top 3 careers. The marker sits on the terrace just left of the
 // planter; the planter itself (x0..x1, from its rim down to the terrace) is made solid, since the
 // map art gives it no floor underneath and players would otherwise drop through it.
 const GOAL = { x: 938, row: 102, planter: { x0: 948, x1: 983, top: 90, bottom: 104 } };
-const GOAL_TEXT = 'Sube al último piso y ve al árbol de la esquina superior derecha. Oprime ACCIÓN junto a él para ver tus resultados.';
+// {act} in a message stands for the action button: the phone shows its icon there
+const GOAL_TEXT = `Sube al piso ${TOP_FLOOR} y ve al árbol de la esquina superior derecha. Oprime {act} junto a él para ver tus resultados.`;
 
 // All the points each career has on offer across the 40 options. They are not equal (15 to 17),
 // so the ranking divides by this first — the correction the test document asks for.

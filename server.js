@@ -39,15 +39,19 @@ const server = http.createServer((req, res) => {
 
 // Roles: "game" (the screen) and "controller" (a phone). Every phone is its own player.
 // Controller input is relayed to every game tagged with the phone's id and slot (1, 2, 3, ...).
+// A phone brings a key it keeps across reloads; its id is made from it, so a phone that reconnects
+// is the same player again (the game keeps its answers), and it gets its old slot (colour) back.
 const wss = new WebSocketServer({ server, path: '/ws' });
 const games = new Set();
 const controllers = new Set();
+const slotOf = new Map();   // phone key -> the slot it last had
 let nextId = 1;
 
 function send(ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 function broadcast(set, msg) { for (const ws of set) send(ws, msg); }
-function freeSlot() {
+function freeSlot(wanted) {
   const used = new Set([...controllers].map((c) => c.slot));
+  if (wanted && !used.has(wanted)) return wanted;
   let n = 1;
   while (used.has(n)) n++;
   return n;
@@ -66,7 +70,8 @@ setInterval(() => {
 wss.on('connection', (ws, req) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
-  const role = new URL(req.url, 'http://x').searchParams.get('role');
+  const params = new URL(req.url, 'http://x').searchParams;
+  const role = params.get('role');
   if (role === 'game') {
     games.add(ws);
     for (const c of controllers) send(ws, { t: 'join', id: c.id, slot: c.slot });
@@ -82,8 +87,12 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  ws.id = `p${nextId++}`;
-  ws.slot = freeSlot();
+  const key = /^[a-z0-9]{8,40}$/i.test(params.get('key') || '') ? params.get('key') : null;
+  ws.id = key ? `k${key}` : `p${nextId++}`;
+  // the same phone twice (a reconnect racing the old socket's close): the new one takes over quietly
+  for (const c of controllers) if (c.id === ws.id) { c.replaced = true; controllers.delete(c); ws.slot = c.slot; c.close(); }
+  ws.slot = ws.slot || freeSlot(key && slotOf.get(key));
+  if (key) slotOf.set(key, ws.slot);
   controllers.add(ws);
   send(ws, { t: 'hello', id: ws.id, slot: ws.slot, games: games.size });
   broadcast(games, { t: 'join', id: ws.id, slot: ws.slot });
@@ -92,9 +101,10 @@ wss.on('connection', (ws, req) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg.t === 'input') broadcast(games, { t: 'input', id: ws.id, slot: ws.slot, s: msg.s });
-    else if (msg.t === 'answer' || msg.t === 'seen') broadcast(games, { ...msg, id: ws.id, slot: ws.slot });
+    else if (['answer', 'seen', 'floor', 'liftClose'].includes(msg.t)) broadcast(games, { ...msg, id: ws.id, slot: ws.slot });
   });
   ws.on('close', () => {
+    if (ws.replaced) return;   // its player lives on in the socket that took over
     controllers.delete(ws);
     broadcast(games, { t: 'leave', id: ws.id });
   });

@@ -182,7 +182,8 @@ const K = (x, y) => (x < 0 || x >= W || y < 0 || y >= H) ? 1 : kind[y * W + x];
 
 // ---------- input (websocket + keyboard) ----------
 // Every player (one per phone, plus an optional keyboard player) owns its input state and edge latches.
-const BUTTONS = ['left', 'right', 'up', 'down', 'jump', 'dash', 'act', 'die'];
+// Moving is left/right only: floors are changed by stairs or the lift, never by climbing or dropping.
+const BUTTONS = ['left', 'right', 'jump', 'dash', 'act', 'die'];
 const EDGE = ['jump', 'dash', 'act', 'die'];
 const players = new Map();
 let kbPlayer = null;
@@ -192,8 +193,8 @@ function onRemote(p, s) {
   for (const b of BUTTONS) p.input[b] = !!s[b];
 }
 const KEYMAP = {
-  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up',
-  ArrowDown: 'down', KeyS: 'down', Space: 'jump', KeyZ: 'jump', ShiftLeft: 'dash', ShiftRight: 'dash', KeyX: 'dash',
+  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  Space: 'jump', KeyZ: 'jump', ShiftLeft: 'dash', ShiftRight: 'dash', KeyX: 'dash',
   KeyE: 'act', KeyK: 'die',
 };
 addEventListener('keydown', (e) => {
@@ -217,15 +218,30 @@ const held = (a) => !!P.input[a];
 
 // ---------- player ----------
 let P;   // the player currently being updated / drawn
+// A phone that drops its connection (screen lock, weak signal, a reload) comes back with the same id,
+// so its player is parked here instead of thrown away: answers, score and place all survive.
+const away = new Map();
 function addPlayer(id, slot) {
-  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, near: null };
+  let p = away.get(id);
+  if (p) {
+    away.delete(id);
+    Object.assign(p, { slot, input: {}, latch: {}, asking: null, lift: false, near: null });
+  } else {
+    p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, lift: false, near: null };
+    const prev = P; P = p; respawn(); P = prev;
+  }
   players.set(id, p);
-  const prev = P; P = p; respawn(); P = prev;
   sendProgress(p);
   updateStatus();
   return p;
 }
-function removePlayer(id) { players.delete(id); if (id === 'kb') kbPlayer = null; updateStatus(); }
+function removePlayer(id) {
+  const p = players.get(id);
+  if (p && id !== 'kb') away.set(id, p);
+  players.delete(id);
+  if (id === 'kb') kbPlayer = null;
+  updateStatus();
+}
 function respawn() {
   Object.assign(P, {
     x: SPAWN.x + (P.slot % 5) * 22, y: SPAWN.y, vx: 0, vy: 0, face: 1,
@@ -301,8 +317,8 @@ function moveY(dy) {
 }
 
 function step(dt) {
-  // answering takes as long as it takes: the character just stands still until the answer comes in
-  if (P.asking) { P.latch.jump = P.latch.dash = P.latch.act = P.latch.die = false; P.input = {}; }
+  // answering (or picking a floor) takes as long as it takes: the character just stands still meanwhile
+  if (P.asking || P.lift) { P.latch.jump = P.latch.dash = P.latch.act = P.latch.die = false; P.input = {}; }
   const left = held('left'), right = held('right'), up = held('up'), down = held('down');
   const dirX = (right ? 1 : 0) - (left ? 1 : 0);
   const L = P.latch, jumpP = L.jump, dashP = L.dash, dieP = L.die;
@@ -398,13 +414,15 @@ function setAnim(a) { if (P.anim !== a) { P.anim = a; P.animT = 0; } }
 
 // ---------- the aptitude test, laid over the building ----------
 // Each room in EVENTS floats an exclamation mark, lit for everyone since the screen is shared.
-// Standing under one and pressing ACCIÓN sends its question to that player's phone; each player
-// answers any EVENTS_PER_PLAYER of them, never the same one twice. After the last one they are sent
-// up to the tree on the roof (GOAL), where ACCIÓN hands over their top 3 careers.
+// Standing under one and pressing the action button sends its question to that player's phone; each
+// player answers any EVENTS_PER_PLAYER of them, never the same one twice. After the last one they are
+// sent up to the tree on the roof (GOAL), where the action button hands over their top 3 careers.
+// The same button, in front of a lift door, opens the lift's floor panel on the phone.
 let ws = null;
 const toPhone = (id, msg) => { if (ws && ws.readyState === 1 && id !== 'kb') ws.send(JSON.stringify({ ...msg, id })); };
 const atMarker = (p, m) => p.ground && Math.abs(p.x + HB_W / 2 - m.x) < 14 && Math.abs(p.y + HB_H - m.row) <= 4;
 const finished = (p) => p.done.size >= EVENTS_PER_PLAYER;
+const liftStop = (p) => FLOORS.find((f) => atMarker(p, { x: LIFT.x, row: f.row }));
 
 function askEvent(p, ev) {
   p.asking = ev;
@@ -446,21 +464,41 @@ function notice(p, title, text, stay = false) {
   toPhone(p.id, m);
   if (p.id === 'kb') localQuiz(m);
 }
+
+// the lift: the phone shows a panel with every floor, and the chosen one moves the player there
+function openLift(p, from) {
+  p.lift = true;
+  const m = { t: 'lift', current: from.n, floors: FLOORS.map((f) => f.n) };
+  toPhone(p.id, m);
+  if (p.id === 'kb') localQuiz(m);
+}
+function closeLift(p) {
+  p.lift = false;
+  if (p.id === 'kb') localQuiz(null);
+}
+function rideLift(p, n) {
+  const to = FLOORS.find((f) => f.n === n);
+  if (!p.lift || !to) return;
+  Object.assign(p, { x: LIFT.x - HB_W / 2, y: to.row - HB_H, vx: 0, vy: 0, ground: true, dashT: 0, jumpBuf: 0 });
+  closeLift(p);
+}
+
 function setNear(p, id) {
   if (p.near === id) return;
   p.near = id;
-  toPhone(p.id, { t: 'near', on: id !== null });   // the phone lights up its ACCIÓN button
+  toPhone(p.id, { t: 'near', on: id !== null });   // the phone lights up its action button
 }
-// runs after step(), so the ACCIÓN latch is still set: nothing fires by just walking past a marker
+// runs after step(), so the action latch is still set: nothing fires by just walking past a marker
 function checkMarkers(p) {
   const act = p.latch.act; p.latch.act = false;
-  if (p.dead || p.asking) return;
-  const done = finished(p), atGoal = atMarker(p, GOAL);
-  const ev = atGoal ? null : EVENTS.find((e) => atMarker(p, e));
-  // ACCIÓN only lights up where it will do something: an unanswered event, or the tree once finished
-  setNear(p, atGoal ? (done ? 'goal' : null) : ev && !done && !p.done.has(ev.id) ? ev.id : null);
+  if (p.dead || p.asking || p.lift) return;
+  const done = finished(p), atGoal = atMarker(p, GOAL), stop = liftStop(p);
+  const ev = atGoal || stop ? null : EVENTS.find((e) => atMarker(p, e));
+  // the button only lights up where it will do something: the lift, an unanswered event, or the tree once finished
+  setNear(p, stop ? 'lift' : atGoal ? (done ? 'goal' : null) : ev && !done && !p.done.has(ev.id) ? ev.id : null);
   if (!act) return;
-  if (atGoal) {
+  if (stop) openLift(p, stop);
+  else if (atGoal) {
     if (done) sendResult(p);
     else {
       const left = EVENTS_PER_PLAYER - p.done.size;
@@ -468,43 +506,55 @@ function checkMarkers(p) {
     }
   } else if (ev) {
     if (done) notice(p, 'Ya completaste tus eventos', GOAL_TEXT);
-    else if (p.done.has(ev.id)) notice(p, 'Ya respondiste este evento', 'Busca otro signo de admiración y oprime ACCIÓN debajo de él.');
+    else if (p.done.has(ev.id)) notice(p, 'Ya respondiste este evento', 'Busca otro signo de admiración y oprime {act} debajo de él.');
     else askEvent(p, ev);
   }
 }
 
-// the markers themselves, drawn over the map
-function drawBang(cx, by, col) {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(cx - 3, by - 13, 6, 13);
-  ctx.fillStyle = col;
-  ctx.fillRect(cx - 2, by - 12, 4, 7);
-  ctx.fillRect(cx - 2, by - 3, 4, 2);
-}
-function drawStar(cx, by) {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(cx - 5, by - 12, 10, 12);
-  ctx.fillStyle = '#ffd23f';
-  ctx.fillRect(cx - 1, by - 11, 2, 10);
-  ctx.fillRect(cx - 4, by - 7, 8, 2);
-  ctx.fillRect(cx - 3, by - 9, 6, 6);
+// What never changes — the floor-1 lift door the art is missing, the floor numbers over every lift
+// door and the lab signs — is painted once onto a copy of the map. Only what moves is drawn per frame.
+function paintBuilding(map) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(map, 0, 0);
+  const d = LIFT.door, w = d.x1 - d.x0 + 1, h = d.bottom - d.top + 1, from = LIFT.doorFrom;
+  const ground = FLOORS[0].row;
+  if (ground !== from) {
+    // copy the door pixel by pixel, leaving out the wall behind it (the wood of the floor it comes
+    // from), so it sits on floor 1's own wall, in front of the desk there so the lift stays easy to spot
+    const src = g.getImageData(d.x0, from + d.top, w, h), dst = g.getImageData(d.x0, ground + d.top, w, h);
+    const wall = [src.data[0], src.data[1], src.data[2]];
+    const isWall = (i) => Math.abs(src.data[i] - wall[0]) + Math.abs(src.data[i + 1] - wall[1]) + Math.abs(src.data[i + 2] - wall[2]) < 40;
+    for (let i = 0; i < src.data.length; i += 4) if (!isWall(i)) for (let k = 0; k < 4; k++) dst.data[i + k] = src.data[i + k];
+    g.putImageData(dst, d.x0, ground + d.top);
+  }
+  for (const f of FLOORS) drawFloorTag(g, LIFT.x, f.row + d.top - 12, f.n);
+  for (const ev of EVENTS) drawLabSign(g, ev.x, ev.row - 45, LABS[ev.lab]);
+  return c;
 }
 function drawMarkers(t) {
-  drawStar(GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
+  drawStar(ctx, GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
   for (const ev of EVENTS) {
     const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
-    drawBang(ev.x, by, '#ffd23f');   // always lit: the screen is shared, so a marker never goes out for everyone
+    drawBang(ctx, ev.x, by);   // always lit: the screen is shared, so a marker never goes out for everyone
   }
 }
 
-// the same question on the game screen, for whoever is playing on the keyboard
+// the same panels on the game screen, for whoever is playing on the keyboard
 const quizBox = document.getElementById('quiz');
+const kbText = (s) => s.replace(/\{act\}/g, '<kbd>E</kbd>');
 function localQuiz(m) {
   if (!m) { quizBox.classList.add('hide'); return; }
   quizBox.classList.remove('hide');
   if (m.t === 'notice') {
-    quizBox.innerHTML = `<h2>${m.title}</h2><p>${m.text}</p>`;
-    if (!m.stay) setTimeout(() => { if (quizBox.innerHTML.includes(m.text)) localQuiz(null); }, 2500);
+    quizBox.innerHTML = `<h2>${m.title}</h2><p>${kbText(m.text)}</p>`;
+    if (!m.stay) setTimeout(() => { if (quizBox.innerHTML.includes(m.title)) localQuiz(null); }, 2500);
+    return;
+  }
+  if (m.t === 'lift') {
+    quizBox.innerHTML = `<h2>Ascensor · estás en el piso ${m.current}</h2>` +
+      `<p>Elige piso con las teclas ${m.floors[0]}–${m.floors[m.floors.length - 1]} · <kbd>Esc</kbd> para salir</p>`;
     return;
   }
   if (m.t === 'result') {
@@ -517,8 +567,11 @@ function localQuiz(m) {
     `<p class="hint">Responde con las teclas 1–5</p>`;
 }
 addEventListener('keydown', (e) => {
-  const n = '12345'.indexOf(e.key);
-  if (n >= 0 && kbPlayer && kbPlayer.asking) { answerEvent(kbPlayer, n); e.preventDefault(); }
+  if (!kbPlayer) return;
+  const n = parseInt(e.key, 10);
+  if (kbPlayer.asking && n >= 1 && n <= 5) { answerEvent(kbPlayer, n - 1); e.preventDefault(); }
+  else if (kbPlayer.lift && n >= 1) { rideLift(kbPlayer, n); e.preventDefault(); }
+  else if (kbPlayer.lift && e.key === 'Escape') closeLift(kbPlayer);
 });
 
 // ---------- render ----------
@@ -575,12 +628,8 @@ function drawPlayer() {
   ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = tagColor(P);
   ctx.fillText(P.slot === 0 ? 'KB' : `P${P.slot}`, cx, by - 19);
-  // standing under a marker they have not answered yet: remind them which button opens it
-  if (P.near !== null && !P.asking) {
-    ctx.font = 'bold 7px monospace';
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeText('ACCIÓN', cx, by - 28);
-    ctx.fillStyle = '#ffd23f'; ctx.fillText('ACCIÓN', cx, by - 28);
-  }
+  // standing where the action button does something: show that button over their head
+  if (P.near !== null && !P.asking && !P.lift) drawActButton(ctx, cx, by - 32);
 }
 function draw(t) {
   ctx.clearRect(0, 0, W, H);
@@ -610,11 +659,22 @@ function connect() {
   ws.onopen = () => { connected = true; updateStatus(); };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.t === 'join') { if (!players.has(m.id)) addPlayer(m.id, m.slot); }
+    if (m.t === 'join') {
+      const p = players.get(m.id);
+      if (!p) addPlayer(m.id, m.slot);
+      else {
+        // the same phone again on a fresh connection: whatever panel it had open is gone, so let the
+        // player open it again, and remind the phone how far along it is
+        Object.assign(p, { slot: m.slot, asking: null, lift: false, near: null });
+        sendProgress(p);
+      }
+    }
     else if (m.t === 'leave') removePlayer(m.id);
     else if (m.t === 'input') { if (!players.has(m.id)) addPlayer(m.id, m.slot); onRemote(players.get(m.id), m.s || {}); }
     else if (m.t === 'answer') { const p = players.get(m.id); if (p) answerEvent(p, m.choice); }
     else if (m.t === 'seen') { const p = players.get(m.id); if (p && p.asking) closeAsk(p); }
+    else if (m.t === 'floor') { const p = players.get(m.id); if (p) rideLift(p, m.n); }
+    else if (m.t === 'liftClose') { const p = players.get(m.id); if (p) closeLift(p); }
   };
   ws.onclose = () => {
     connected = false; updateStatus(); setTimeout(connect, 1000);
@@ -624,9 +684,9 @@ function connect() {
 
 (async function init() {
   const [map, ...imgs] = await Promise.all([loadImg('ML.png'), ...Object.keys(SPRITES).map((n) => loadImg(`sprites/${n}.png`))]);
-  bg = map;
   Object.keys(SPRITES).forEach((n, i) => { sheets[n] = imgs[i]; });
-  buildCollision(map);
+  buildCollision(map);   // from the bare art: the signs and numbers painted next must never become floors
+  bg = paintBuilding(map);
   // the tree's planter has no floor drawn under it: make it a solid block you can bump into or stand on
   const pl = GOAL.planter;
   for (let y = pl.top + SURFACE_SINK; y <= pl.bottom; y++) for (let x = pl.x0; x <= pl.x1; x++) kind[y * W + x] = 1;
