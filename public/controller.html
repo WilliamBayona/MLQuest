@@ -125,7 +125,7 @@
 <script>
 'use strict';
 const state = {};
-let ws, slot = '?', games = 0, progress = null;
+let ws, slot = '?', games = 0, progress = null, retryTimer = null;
 const dot = document.getElementById('dot'), txt = document.getElementById('txt');
 
 // the same tint and tag colour the game gives this slot (HUES / LABEL_COLORS in game.js); CSS
@@ -142,7 +142,7 @@ function showCharacter() {
 }
 function showStatus() {
   dot.classList.toggle('on', games > 0);
-  txt.textContent = games === 0 ? `Jugador ${slot} · sin pantalla de juego`
+  txt.textContent = games === 0 ? 'buscando la pantalla de juego…'
     : !progress ? `Jugador ${slot} · jugando`
     : progress.collected >= progress.total ? `Jugador ${slot} · ${progress.total}/${progress.total} · ve al árbol del último piso`
     : `Jugador ${slot} · ${progress.collected}/${progress.total} eventos`;
@@ -167,6 +167,10 @@ function connect() {
     if (m.t === 'hello' || m.t === 'status') {
       if (m.games !== undefined) games = m.games;
       showStatus();
+      // On a host that runs several copies of the server (Vercel), this phone can land on a copy the
+      // game screen is not connected to. If no game shows up soon, reconnect and try another copy.
+      clearTimeout(retryTimer);
+      if (games === 0) retryTimer = setTimeout(() => { if (games === 0) ws.close(); }, 2500);
     }
   };
   ws.onclose = () => { dot.classList.remove('on'); txt.textContent = 'reconectando…'; setTimeout(connect, 800); };

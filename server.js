@@ -53,7 +53,19 @@ function freeSlot() {
   return n;
 }
 
+// Phones that lock or lose signal often vanish without a close; ping everyone and drop whoever stops
+// answering, so their character leaves the screen instead of standing there forever.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 30000);
+
 wss.on('connection', (ws, req) => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   const role = new URL(req.url, 'http://x').searchParams.get('role');
   if (role === 'game') {
     games.add(ws);

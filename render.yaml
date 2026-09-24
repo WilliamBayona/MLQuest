@@ -1,0 +1,11 @@
+# Render blueprint: one always-on Node process, so the game screen and every phone share the same
+# server (and the same list of players). server.js already reads PORT from the environment.
+services:
+  - type: web
+    name: mlquest
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/info
+    autoDeploy: true
