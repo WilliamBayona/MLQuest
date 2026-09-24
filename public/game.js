@@ -218,7 +218,7 @@ const held = (a) => !!P.input[a];
 // ---------- player ----------
 let P;   // the player currently being updated / drawn
 function addPlayer(id, slot) {
-  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, askT: 0, near: null };
+  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, near: null };
   players.set(id, p);
   const prev = P; P = p; respawn(); P = prev;
   sendProgress(p);
@@ -301,13 +301,8 @@ function moveY(dy) {
 }
 
 function step(dt) {
-  if (P.asking) {
-    P.latch.jump = P.latch.dash = P.latch.act = P.latch.die = false; P.input = {};
-    P.askT -= dt;
-    const left = document.getElementById('qt');
-    if (left && P.id === 'kb') left.textContent = Math.max(0, Math.ceil(P.askT));
-    if (P.askT <= 0) closeAsk(P);         // ran out of time: step away and come back to retry
-  }
+  // answering takes as long as it takes: the character just stands still until the answer comes in
+  if (P.asking) { P.latch.jump = P.latch.dash = P.latch.act = P.latch.die = false; P.input = {}; }
   const left = held('left'), right = held('right'), up = held('up'), down = held('down');
   const dirX = (right ? 1 : 0) - (left ? 1 : 0);
   const L = P.latch, jumpP = L.jump, dashP = L.dash, dieP = L.die;
@@ -413,10 +408,9 @@ const finished = (p) => p.done.size >= EVENTS_PER_PLAYER;
 
 function askEvent(p, ev) {
   p.asking = ev;
-  p.askT = ANSWER_SECONDS;
   const ask = {
     t: 'ask', ev: ev.id, room: ev.room, floor: ev.floor, item: ev.item, context: ev.context,
-    question: ev.question, options: ev.options.map((o) => o.t), seconds: ANSWER_SECONDS,
+    question: ev.question, options: ev.options.map((o) => o.t),
   };
   toPhone(p.id, ask);
   if (p.id === 'kb') localQuiz(ask);
@@ -520,7 +514,7 @@ function localQuiz(m) {
   }
   quizBox.innerHTML = `<h2>${m.room} · ${m.floor}</h2><p>${m.context}</p><p><b>${m.question}</b></p>` +
     m.options.map((o, i) => `<p class="opt"><b>${i + 1}</b> ${o}</p>`).join('') +
-    `<p class="hint">Responde con las teclas 1–5 · <span id="qt">${m.seconds}</span>s</p>`;
+    `<p class="hint">Responde con las teclas 1–5</p>`;
 }
 addEventListener('keydown', (e) => {
   const n = '12345'.indexOf(e.key);

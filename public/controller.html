@@ -54,8 +54,8 @@
                  border-bottom:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a; }
   #quiz h1 { margin:0; font-size:14px; color:var(--mark); text-shadow:2px 2px 0 #000; }
   #quiz .floor { font-size:12px; opacity:.85; }
-  #quiz .clock { margin-left:auto; font-size:13px; font-weight:700; background:#000; color:var(--mark); padding:2px 8px; }
-  #quiz .clock.low { color:#ff6a4d; }
+  #quiz .badge { margin-left:auto; font-size:13px; font-weight:700; background:#000; color:var(--mark); padding:2px 8px; }
+  #quiz .badge:empty { display:none; }
   #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:8px; }
   #quiz .body.ask { display:flex; flex-direction:column; gap:8px; }
   /* the question box: a cream board that fills the free space but never shrinks below its text; on a
@@ -83,7 +83,7 @@
   #quiz .close { display:block; margin:10px auto 0; padding:8px 28px; font-size:14px; border-radius:0; color:var(--cream); background:var(--slab); border:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a, 3px 3px 0 rgba(0,0,0,.3); }
   @media (max-height:340px) {
     #quiz header { padding-top:max(3px, env(safe-area-inset-top)); padding-bottom:3px; }
-    #quiz h1, #quiz .clock { font-size:12px; }
+    #quiz h1, #quiz .badge { font-size:12px; }
     #quiz .body { margin-top:5px; }
     #quiz .body.ask, #quiz .opts { gap:5px 8px; }
     #quiz .stem { padding:4px 12px; }
@@ -118,7 +118,7 @@
   </div>
 </div>
 <div id="quiz">
-  <header><h1 id="qRoom"></h1><span class="floor" id="qFloor"></span><span class="clock" id="qClock"></span></header>
+  <header><h1 id="qRoom"></h1><span class="floor" id="qFloor"></span><span class="badge" id="qBadge"></span></header>
   <div class="body" id="qBody"></div>
 </div>
 <div class="rotate">Gira el telefono a horizontal ↻</div>
@@ -175,9 +175,9 @@ function connect() {
 // ---- the test: the game sends a question when the character reaches a marked room ----
 const quiz = document.getElementById('quiz');
 const qRoom = document.getElementById('qRoom'), qFloor = document.getElementById('qFloor');
-const qClock = document.getElementById('qClock'), qBody = document.getElementById('qBody');
+const qBadge = document.getElementById('qBadge'), qBody = document.getElementById('qBody');
 const actBtn = document.querySelector('[data-b=act]');
-let clockTimer = null, flashTimer = null;
+let flashTimer = null;
 
 function releaseAll() {
   for (const k in state) state[k] = false;
@@ -192,24 +192,14 @@ function openQuiz() {
 function closeQuiz() {
   quiz.classList.remove('on');
   document.body.classList.remove('quizzing');
-  clearInterval(clockTimer); clockTimer = null;
 }
-function startClock(seconds) {
-  let left = seconds;
-  qClock.textContent = left + 's';
-  clearInterval(clockTimer);
-  clockTimer = setInterval(() => {
-    left -= 1;
-    qClock.textContent = Math.max(0, left) + 's';
-    qClock.classList.toggle('low', left <= 10);
-    if (left <= 0) clearInterval(clockTimer);
-  }, 1000);
-}
+// the corner of the header shows how far along this player is, e.g. 2/4
+const showProgressBadge = () => { qBadge.textContent = progress ? progress.collected + '/' + progress.total : ''; };
 function showQuestion(m) {
   releaseAll();                       // drop the d-pad so the character stops where it is
   qRoom.textContent = m.room;
   qFloor.textContent = m.floor;
-  startClock(m.seconds);
+  showProgressBadge();
   qBody.innerHTML = '';
   qBody.classList.add('ask');
   const stem = document.createElement('div'); stem.className = 'stem';
@@ -241,21 +231,19 @@ function showQuestion(m) {
 function showSaved(m) {
   qRoom.textContent = 'Respuesta guardada';
   qFloor.textContent = m.item || '';
-  qClock.textContent = m.collected + '/' + m.total;
+  qBadge.textContent = m.collected + '/' + m.total;
   const left = m.total - m.collected;
   qBody.classList.remove('ask');
   qBody.innerHTML = '<p class="note">Te ' + (left === 1 ? 'falta 1 evento' : 'faltan ' + left + ' eventos') +
     '. Busca otro signo de admiracion y oprime ACCION debajo de el.</p>';
   openQuiz();
-  clearInterval(clockTimer);
   flashTimer = setTimeout(closeQuiz, 1800);
 }
 function showNotice(m) {
   releaseAll();
-  clearInterval(clockTimer);
   qRoom.textContent = m.title;
   qFloor.textContent = '';
-  qClock.textContent = progress ? progress.collected + '/' + progress.total : '';
+  showProgressBadge();
   qBody.classList.remove('ask');
   qBody.innerHTML = '';
   const note = document.createElement('p'); note.className = 'note'; note.textContent = m.text;
@@ -270,10 +258,9 @@ function showNotice(m) {
 }
 function showResult(m) {
   releaseAll();
-  clearInterval(clockTimer);
   qRoom.textContent = 'Tus 3 carreras mas afines';
   qFloor.textContent = '';
-  qClock.textContent = m.collected + '/' + m.total;
+  qBadge.textContent = m.collected + '/' + m.total;
   qBody.innerHTML = '';
   qBody.classList.remove('ask');
   if (!m.top.length || !m.collected) {

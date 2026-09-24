@@ -16,7 +16,6 @@ const CAREERS = {
   BIO: 'Ingeniería Biomédica',
 };
 
-const ANSWER_SECONDS = 45;
 const EVENTS_PER_PLAYER = 4;   // each player answers this many rooms, then collects the result at the tree
 
 const EVENTS = [
