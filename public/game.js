@@ -404,8 +404,8 @@ function setAnim(a) { if (P.anim !== a) { P.anim = a; P.animT = 0; } }
 // ---------- the aptitude test, laid over the building ----------
 // Each room in EVENTS floats an exclamation mark, lit for everyone since the screen is shared.
 // Standing under one and pressing ACCIÓN sends its question to that player's phone; each player
-// answers any EVENTS_PER_PLAYER of them, never the same one twice, and the last one hands over
-// their top 3 careers.
+// answers any EVENTS_PER_PLAYER of them, never the same one twice. After the last one they are sent
+// up to the tree on the roof (GOAL), where ACCIÓN hands over their top 3 careers.
 let ws = null;
 const toPhone = (id, msg) => { if (ws && ws.readyState === 1 && id !== 'kb') ws.send(JSON.stringify({ ...msg, id })); };
 const atMarker = (p, m) => p.ground && Math.abs(p.x + HB_W / 2 - m.x) < 14 && Math.abs(p.y + HB_H - m.row) <= 4;
@@ -433,7 +433,7 @@ function answerEvent(p, choice) {
   p.done.add(ev.id);
   closeAsk(p);
   sendProgress(p);
-  if (finished(p)) sendResult(p);
+  if (finished(p)) notice(p, '¡Completaste tus ' + EVENTS_PER_PLAYER + ' eventos!', GOAL_TEXT, true);
   else toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS_PER_PLAYER });
 }
 // how far along a player is goes to their own phone only, never onto the shared screen
@@ -446,6 +446,12 @@ function sendResult(p) {
   toPhone(p.id, res);
   if (p.id === 'kb') localQuiz(res);
 }
+// a short message on the player's phone; `stay` keeps it up until they close it
+function notice(p, title, text, stay = false) {
+  const m = { t: 'notice', title, text, stay };
+  toPhone(p.id, m);
+  if (p.id === 'kb') localQuiz(m);
+}
 function setNear(p, id) {
   if (p.near === id) return;
   p.near = id;
@@ -455,13 +461,22 @@ function setNear(p, id) {
 function checkMarkers(p) {
   const act = p.latch.act; p.latch.act = false;
   if (p.dead || p.asking) return;
-  if (finished(p)) { setNear(p, null); if (act) sendResult(p); return; }
-  const ev = EVENTS.find((e) => atMarker(p, e));
-  const open = ev && !p.done.has(ev.id);
-  setNear(p, open ? ev.id : null);
-  if (!ev || !act) return;
-  if (open) askEvent(p, ev);
-  else toPhone(p.id, { t: 'notice', title: 'Ya respondiste este evento', text: 'Busca otro signo de admiracion y oprime ACCION debajo de el.' });
+  const done = finished(p), atGoal = atMarker(p, GOAL);
+  const ev = atGoal ? null : EVENTS.find((e) => atMarker(p, e));
+  // ACCIÓN only lights up where it will do something: an unanswered event, or the tree once finished
+  setNear(p, atGoal ? (done ? 'goal' : null) : ev && !done && !p.done.has(ev.id) ? ev.id : null);
+  if (!act) return;
+  if (atGoal) {
+    if (done) sendResult(p);
+    else {
+      const left = EVENTS_PER_PLAYER - p.done.size;
+      notice(p, 'Todavía no', `Te ${left === 1 ? 'falta 1 evento' : `faltan ${left} eventos`}. Respóndelos y vuelve al árbol para ver tus resultados.`);
+    }
+  } else if (ev) {
+    if (done) notice(p, 'Ya completaste tus eventos', GOAL_TEXT);
+    else if (p.done.has(ev.id)) notice(p, 'Ya respondiste este evento', 'Busca otro signo de admiración y oprime ACCIÓN debajo de él.');
+    else askEvent(p, ev);
+  }
 }
 
 // the markers themselves, drawn over the map
@@ -472,7 +487,16 @@ function drawBang(cx, by, col) {
   ctx.fillRect(cx - 2, by - 12, 4, 7);
   ctx.fillRect(cx - 2, by - 3, 4, 2);
 }
+function drawStar(cx, by) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(cx - 5, by - 12, 10, 12);
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillRect(cx - 1, by - 11, 2, 10);
+  ctx.fillRect(cx - 4, by - 7, 8, 2);
+  ctx.fillRect(cx - 3, by - 9, 6, 6);
+}
 function drawMarkers(t) {
+  drawStar(GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
   for (const ev of EVENTS) {
     const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
     drawBang(ev.x, by, '#ffd23f');   // always lit: the screen is shared, so a marker never goes out for everyone
@@ -484,6 +508,11 @@ const quizBox = document.getElementById('quiz');
 function localQuiz(m) {
   if (!m) { quizBox.classList.add('hide'); return; }
   quizBox.classList.remove('hide');
+  if (m.t === 'notice') {
+    quizBox.innerHTML = `<h2>${m.title}</h2><p>${m.text}</p>`;
+    if (!m.stay) setTimeout(() => { if (quizBox.innerHTML.includes(m.text)) localQuiz(null); }, 2500);
+    return;
+  }
   if (m.t === 'result') {
     quizBox.innerHTML = `<h2>Top 3 · ${m.collected}/${m.total} respondidas</h2>` +
       (m.top.length ? m.top.map((c, i) => `<p class="rank"><b>${i + 1}. ${c.name}</b> — ${c.pct}%</p>`).join('') : '<p>Responde algún evento primero.</p>');
@@ -604,6 +633,9 @@ function connect() {
   bg = map;
   Object.keys(SPRITES).forEach((n, i) => { sheets[n] = imgs[i]; });
   buildCollision(map);
+  // the tree's planter has no floor drawn under it: make it a solid block you can bump into or stand on
+  const pl = GOAL.planter;
+  for (let y = pl.top + SURFACE_SINK; y <= pl.bottom; y++) for (let x = pl.x0; x <= pl.x1; x++) kind[y * W + x] = 1;
   connect();
   fetch('/api/info').then((r) => r.json()).then((i) => {
     // on a LAN run, point phones at this PC's address; once deployed, the page's own origin is the one to share

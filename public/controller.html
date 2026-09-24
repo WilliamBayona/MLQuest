@@ -143,7 +143,9 @@ function showCharacter() {
 function showStatus() {
   dot.classList.toggle('on', games > 0);
   txt.textContent = games === 0 ? `Jugador ${slot} · sin pantalla de juego`
-    : progress ? `Jugador ${slot} · ${progress.collected}/${progress.total} eventos` : `Jugador ${slot} · jugando`;
+    : !progress ? `Jugador ${slot} · jugando`
+    : progress.collected >= progress.total ? `Jugador ${slot} · ${progress.total}/${progress.total} · ve al árbol del último piso`
+    : `Jugador ${slot} · ${progress.collected}/${progress.total} eventos`;
 }
 
 function send() {
@@ -258,8 +260,13 @@ function showNotice(m) {
   qBody.innerHTML = '';
   const note = document.createElement('p'); note.className = 'note'; note.textContent = m.text;
   qBody.appendChild(note);
+  if (m.stay) {
+    const btn = document.createElement('button'); btn.className = 'close'; btn.textContent = 'Entendido';
+    btn.addEventListener('click', closeQuiz);
+    qBody.appendChild(btn);
+  }
   openQuiz();
-  flashTimer = setTimeout(closeQuiz, 1800);
+  if (!m.stay) flashTimer = setTimeout(closeQuiz, 2500);
 }
 function showResult(m) {
   releaseAll();

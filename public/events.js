@@ -17,7 +17,7 @@ const CAREERS = {
 };
 
 const ANSWER_SECONDS = 45;
-const EVENTS_PER_PLAYER = 4;   // each player is dealt this many rooms; answering them all gives the result
+const EVENTS_PER_PLAYER = 4;   // each player answers this many rooms, then collects the result at the tree
 
 const EVENTS = [
   {
@@ -117,6 +117,13 @@ const EVENTS = [
     ],
   },
 ];
+
+// The tree on the roof terrace, top right: once a player has answered all their events, pressing
+// ACCIÓN beside it hands over their top 3 careers. The marker sits on the terrace just left of the
+// planter; the planter itself (x0..x1, from its rim down to the terrace) is made solid, since the
+// map art gives it no floor underneath and players would otherwise drop through it.
+const GOAL = { x: 938, row: 102, planter: { x0: 948, x1: 983, top: 90, bottom: 104 } };
+const GOAL_TEXT = 'Sube al último piso y ve al árbol de la esquina superior derecha. Oprime ACCIÓN junto a él para ver tus resultados.';
 
 // All the points each career has on offer across the 40 options. They are not equal (15 to 17),
 // so the ranking divides by this first — the correction the test document asks for.
