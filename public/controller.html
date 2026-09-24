@@ -29,39 +29,47 @@
   @keyframes ready { from { box-shadow:0 5px 0 #0d0b14, 0 0 0 0 #ffd23f; } to { box-shadow:0 5px 0 #0d0b14, 0 0 0 7px #ffd23f88; } }
   [data-b=die]  { width:22%; aspect-ratio:1; right:8%; top:0; font-size:clamp(11px,2.4vw,15px); background:#7a2a3a; }
   [data-b].on { background:var(--accent); }
-  /* quiz panel: takes over the whole phone, controls hidden, "¿Quién quiere ser millonario?" style */
+  /* quiz panel: takes over the whole phone with the controls hidden, drawn in the map's own
+     materials — plank walls, cream boards, black outlines, grey slabs and the yellow of the markers */
   body.quizzing .pad, body.quizzing .status { display:none; }
-  #quiz { position:fixed; inset:0; z-index:12; background:radial-gradient(ellipse at 50% 0%, #1c2b70 0%, #070b24 75%); color:var(--fg); display:none;
-          flex-direction:column; padding:max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+  #quiz { --wood:#debc8b; --plank:#c9a26f; --cream:#f3ead2; --brown:#9e8572; --slab:#696969; --ink:#2b2118; --mark:#ffd23f;
+          --pl:max(14px, env(safe-area-inset-left)); --pr:max(14px, env(safe-area-inset-right));
+          position:fixed; inset:0; z-index:12; color:var(--ink); display:none; flex-direction:column;
+          background:repeating-linear-gradient(to bottom, var(--wood) 0 22px, var(--plank) 22px 24px);
+          padding:0 var(--pr) max(10px, env(safe-area-inset-bottom)) var(--pl); }
   #quiz.on { display:flex; }
-  #quiz header { display:flex; align-items:baseline; gap:10px; flex:0 0 auto; }
-  #quiz h1 { margin:0; font-size:14px; color:#f2a531; }
-  #quiz .floor { font-size:12px; opacity:.7; }
-  #quiz .clock { margin-left:auto; font-size:14px; font-weight:700; }
-  #quiz .clock.low { color:#ff7070; }
-  #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:6px; }
+  /* header: a grey floor slab across the top */
+  #quiz header { display:flex; align-items:center; gap:10px; flex:0 0 auto; margin:0 calc(-1 * var(--pr)) 0 calc(-1 * var(--pl));
+                 padding:max(6px, env(safe-area-inset-top)) var(--pr) 6px var(--pl); background:var(--slab); color:var(--cream);
+                 border-bottom:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a; }
+  #quiz h1 { margin:0; font-size:14px; color:var(--mark); text-shadow:2px 2px 0 #000; }
+  #quiz .floor { font-size:12px; opacity:.85; }
+  #quiz .clock { margin-left:auto; font-size:13px; font-weight:700; background:#000; color:var(--mark); padding:2px 8px; }
+  #quiz .clock.low { color:#ff6a4d; }
+  #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:8px; }
   #quiz .body.ask { display:flex; flex-direction:column; gap:8px; overflow:hidden; }
-  /* the question box: shrinks and scrolls on its own so the answers always stay on screen */
+  /* the question box: a cream board that shrinks and scrolls on its own so the answers always stay on screen */
   #quiz .stem { flex:1 1 auto; min-height:0; display:flex; overflow-y:auto; touch-action:pan-y; text-align:center;
-                border:2px solid #9fb3ff; border-radius:16px; background:linear-gradient(#13236a, #050a2a); padding:6px 16px; }
+                background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--wood), 4px 4px 0 rgba(0,0,0,.3); padding:6px 16px; }
   #quiz .stem > div { margin:auto; }
-  #quiz .ctx { font-size:clamp(11px, 2.1vw, 14px); line-height:1.35; margin:0 0 4px; opacity:.9; }
-  #quiz .q { font-size:clamp(12px, 2.4vw, 16px); font-weight:700; margin:0; color:#fff; }
+  #quiz .ctx { font-size:clamp(11px, 2.1vw, 14px); line-height:1.35; margin:0 0 4px; }
+  #quiz .q { font-size:clamp(12px, 2.4vw, 16px); font-weight:700; margin:0; }
   /* answers: 2x2, and a fifth one centred underneath */
-  #quiz .opts { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
-  #quiz .opts button { display:flex; gap:8px; align-items:center; text-align:left; min-height:46px; padding:5px 18px;
-                       font-size:clamp(11px, 2vw, 14px); line-height:1.25; font-weight:600; color:#fff;
-                       border:2px solid #9fb3ff; border-radius:999px; box-shadow:none; background:linear-gradient(#1a2c85, #060d33); }
-  #quiz .opts button:nth-child(5) { grid-column:1 / -1; justify-self:center; width:calc(50% - 6px); }
-  #quiz .opts button .k { color:#f2a531; font-weight:800; flex:0 0 auto; }
-  #quiz .opts button.pick { background:linear-gradient(#ffc451, #d97a0c); color:#14121c; border-color:#fff2c4; }
-  #quiz .opts button.pick .k { color:#14121c; }
-  #quiz .note { margin:10px 0 0; font-size:13px; text-align:center; opacity:.85; }
-  #quiz .rank { display:grid; gap:8px; margin-top:10px; }
-  #quiz .rank div { background:var(--panel); border-radius:10px; padding:10px 12px; font-size:14px; }
-  #quiz .rank b { color:var(--ok); }
-  #quiz .rank .pos { color:var(--accent); font-weight:700; margin-right:6px; }
-  #quiz .close { margin-top:10px; padding:10px; font-size:14px; border-radius:10px; background:var(--panel); }
+  #quiz .opts { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; }
+  #quiz .opts button { display:flex; gap:8px; align-items:center; text-align:left; min-height:46px; padding:5px 10px 9px 6px;
+                       font-size:clamp(11px, 2vw, 14px); line-height:1.25; font-weight:600; color:var(--ink);
+                       background:var(--cream); border:3px solid #000; border-radius:0; box-shadow:inset 0 -5px 0 var(--brown), 3px 3px 0 rgba(0,0,0,.3); }
+  #quiz .opts button:nth-child(5) { grid-column:1 / -1; justify-self:center; width:calc(50% - 5px); }
+  /* the letter is a little copy of the ! marker */
+  #quiz .opts button .k { flex:0 0 auto; display:grid; place-items:center; width:22px; height:22px; background:var(--mark); color:#000; border:2px solid #000; font-weight:800; }
+  #quiz .opts button.pick { background:var(--mark); box-shadow:inset 0 -5px 0 #d99a00, 3px 3px 0 rgba(0,0,0,.3); transform:translateY(2px); }
+  #quiz .opts button.pick .k { background:#000; color:var(--mark); }
+  #quiz .note { margin:12px auto 0; max-width:560px; font-size:13px; text-align:center; background:var(--cream); border:3px solid #000; padding:10px 12px; }
+  #quiz .rank { display:grid; gap:8px; margin:6px auto 0; max-width:560px; }
+  #quiz .rank div { display:flex; align-items:center; gap:10px; background:var(--cream); border:3px solid #000; box-shadow:inset 0 -4px 0 var(--brown); padding:8px 12px 10px; font-size:14px; }
+  #quiz .rank b { flex:1; }
+  #quiz .rank .pos { display:grid; place-items:center; width:24px; height:24px; background:var(--mark); border:2px solid #000; font-weight:800; }
+  #quiz .close { display:block; margin:10px auto 0; padding:8px 28px; font-size:14px; border-radius:0; color:var(--cream); background:var(--slab); border:3px solid #000; box-shadow:inset 0 3px 0 #8a8a8a, 3px 3px 0 rgba(0,0,0,.3); }
   .rotate { display:none; position:fixed; inset:0; background:var(--bg); z-index:9; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:18px; }
   @media (orientation:portrait) { .rotate { display:flex; } }
 </style>
@@ -161,7 +169,7 @@ function showQuestion(m) {
   let picked = false;
   m.options.forEach((text, i) => {
     const b = document.createElement('button');
-    b.innerHTML = '<span class="k">' + 'ABCDE'[i] + ':</span><span></span>';
+    b.innerHTML = '<span class="k">' + 'ABCDE'[i] + '</span><span></span>';
     b.lastChild.textContent = text;
     b.addEventListener('click', () => {
       if (picked) return;

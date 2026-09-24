@@ -5,7 +5,7 @@ const W = 1024, H = 576;
 const HB_W = 10, HB_H = 15;            // hitbox in world px; sprite frames are drawn at native 16px (1 sprite px = 1 map px)
 const GRAVITY = 1400, MAX_FALL = 460;
 const RUN_SPEED = 120, GROUND_ACC = 1200, AIR_ACC = 800, GROUND_FRIC = 1500;
-const JUMP_V = 355, COYOTE = 0.1, JUMP_BUFFER = 0.12;   // one fixed 42px hop: never a whole floor (52px)
+const JUMP_V = 295, COYOTE = 0.1, JUMP_BUFFER = 0.12;   // one fixed ~31px hop: tables and steps (<=28px), never the floor above (>=34px)
 const WALL_SLIDE = 45, WALL_SLIDE_FAST = 130, WALL_CLIMB = 65;
 
 const WALL_JUMP_VX = 150, WALL_LOCK = 0.17;
@@ -613,8 +613,9 @@ function connect() {
   buildCollision(map);
   connect();
   fetch('/api/info').then((r) => r.json()).then((i) => {
-    const host = /^(localhost|127\.)/.test(location.hostname) && i.ips[0] ? i.ips[0] : location.hostname;
-    const url = `http://${host}:${i.port}/controller`;
+    // on a LAN run, point phones at this PC's address; once deployed, the page's own origin is the one to share
+    const local = /^(localhost|127\.)/.test(location.hostname);
+    const url = local && i.ips[0] ? `http://${i.ips[0]}:${i.port}/controller` : `${location.origin}/controller`;
     const a = document.getElementById('ctrlUrl'); a.href = url; a.textContent = url;
   }).catch(() => {});
   requestAnimationFrame(frame);
