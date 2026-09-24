@@ -446,7 +446,7 @@ function answerEvent(p, choice) {
   closeAsk(p);
   sendProgress(p);
   if (finished(p)) notice(p, '¡Completaste tus ' + EVENTS_PER_PLAYER + ' eventos!', GOAL_TEXT, true);
-  else toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS_PER_PLAYER });
+  else toPhone(p.id, { t: 'saved', room: ev.room, collected: p.done.size, total: EVENTS_PER_PLAYER });
 }
 // how far along a player is goes to their own phone only, never onto the shared screen
 function sendProgress(p) { toPhone(p.id, { t: 'progress', collected: p.done.size, total: EVENTS_PER_PLAYER }); }
@@ -512,7 +512,8 @@ function checkMarkers(p) {
 }
 
 // What never changes — the floor-1 lift door the art is missing, the floor numbers over every lift
-// door and the lab signs — is painted once onto a copy of the map. Only what moves is drawn per frame.
+// door, the lab signs and the key in the sky — is painted once onto a copy of the map. Only what
+// moves is drawn per frame.
 function paintBuilding(map) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
@@ -530,8 +531,34 @@ function paintBuilding(map) {
     g.putImageData(dst, d.x0, ground + d.top);
   }
   for (const f of FLOORS) drawFloorTag(g, LIFT.x, f.row + d.top - 12, f.n);
-  for (const ev of EVENTS) drawLabSign(g, ev.x, ev.row - 45, LABS[ev.lab]);
+  for (const lab of Object.values(LABS)) drawLabSign(g, lab.sign.x, lab.sign.y, lab);
+  drawMapKey(g);
   return c;
+}
+// The key along the sky above the roof, for everyone watching the big screen: each symbol the map
+// uses, drawn by the same code as on the map, with what it means. The phones explain it too.
+const MAP_KEY = [
+  { icon: (g, x, y) => drawBang(g, x, y + 7), title: 'Evento', text: ['Párate debajo y oprime', 'el botón de tu celular'] },
+  { icon: (g, x, y) => drawActButton(g, x, y), title: 'Botón de la mano', text: ['Sale sobre ti cuando', 'puedes interactuar'] },
+  { icon: (g, x, y) => drawFloorTag(g, x, y - 6, 3), title: 'Ascensor y piso', text: ['En la puerta oprime el', `botón y elige 1 a ${TOP_FLOOR}`] },
+  { icon: (g, x, y) => drawLabSign(g, x, y - 6, { name: 'Lab', color: LABS.elec.color }), title: 'Laboratorio', text: ['Su nombre va en el', 'letrero de color'] },
+  { icon: (g, x, y) => drawStar(g, x, y + 6), title: `Árbol (piso ${TOP_FLOOR})`, text: [`Con ${EVENTS_PER_PLAYER} eventos listos,`, 've por tus resultados'] },
+];
+function drawMapKey(g) {
+  const x0 = 24, y0 = 4, w = 880, h = 50, cell = w / MAP_KEY.length;
+  g.fillStyle = '#000'; g.fillRect(x0, y0, w, h);
+  g.fillStyle = '#f3ead2'; g.fillRect(x0 + 2, y0 + 2, w - 4, h - 4);
+  g.fillStyle = '#9e8572'; g.fillRect(x0 + 2, y0 + h - 5, w - 4, 3);
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  MAP_KEY.forEach((k, i) => {
+    const cx = x0 + i * cell;
+    if (i) { g.fillStyle = '#9e8572'; g.fillRect(cx, y0 + 6, 1, h - 14); }
+    k.icon(g, cx + 22, y0 + 22);
+    g.fillStyle = '#2b2118'; g.textAlign = 'left';
+    g.font = 'bold 10px monospace'; g.fillText(k.title, cx + 40, y0 + 15);
+    g.font = '9px monospace';
+    k.text.forEach((t, j) => g.fillText(t, cx + 40, y0 + 27 + j * 10));
+  });
 }
 function drawMarkers(t) {
   drawStar(ctx, GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));

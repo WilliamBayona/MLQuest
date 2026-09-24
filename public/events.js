@@ -39,17 +39,21 @@ const floorName = (row) => { const f = floorAt(row); return f ? `Piso ${f.n}` : 
 // the game paints one there, copied from the door of `doorFrom` (door = its box, relative to row).
 const LIFT = { x: 386, door: { x0: 372, x1: 404, top: -27, bottom: -5 }, doorFrom: 479 };
 
-// The labs, by key. Change a name, a sign or a colour here and the map, the phones and the
-// onboarding all follow. `short` is the sign on the map; `area` the engineering it is about.
+// The labs and named rooms, by key. Change a name, a sign position or a colour here and the map, the
+// phones and the onboarding all follow. `name` is shown everywhere, the map's sign included;
+// `sign` is where that sign hangs (x = its centre, y = its top); `area` the engineering it is about.
+// A room gets an event only if some entry in EVENTS points at it: biotec is a sign and nothing else.
+// On the 52px floors a sign and a ! do not fit one above the other, so there the sign hangs beside it.
 const LABS = {
-  ar:    { name: 'Laboratorio de Realidad Aumentada',  short: 'RA-LAB',    area: 'Sistemas y Biomédica',    color: '#b89cff' },
-  elec:  { name: 'Laboratorio de Circuitos Electrónicos', short: 'CIRCUITOS', area: 'Electrónica y Eléctrica', color: '#ffb347' },
-  mec:   { name: 'Taller de Mecánica y Manufactura',   short: 'MECÁNICA',  area: 'Mecánica y Civil',        color: '#a9c1d6' },
-  redes: { name: 'Laboratorio de Redes y Telecomunicaciones', short: 'REDES', area: 'Sistemas y Electrónica', color: '#6ec6ff' },
-  quim:  { name: 'Laboratorio de Química y Procesos',  short: 'QUÍMICA',   area: 'Química y Ambiental',     color: '#86e08a' },
-  robot: { name: 'Laboratorio de Robótica Industrial', short: 'ROBÓTICA',  area: 'Industrial y Mecánica',   color: '#ff8a65' },
-  bio:   { name: 'Laboratorio de Ingeniería Biomédica', short: 'BIOMÉDICA', area: 'Biomédica y Datos',      color: '#ff9ecf' },
-  prof:  { name: 'Oficinas de Profesores',             short: 'PROFES',    area: 'Civil y Ambiental',       color: '#e6d36a' },
+  ar:     { name: 'Colivri',                      sign: { x: 128, y: 497 }, area: 'Sistemas y Biomédica',    color: '#b89cff' },
+  elec:   { name: 'La Pecera',                    sign: { x: 460, y: 497 }, area: 'Electrónica y Eléctrica', color: '#ffb347' },
+  mec:    { name: 'Lab de Manufactura',           sign: { x: 850, y: 497 }, area: 'Mecánica y Civil',        color: '#a9c1d6' },
+  redes:  { name: 'Lab de Redes',                 sign: { x: 900, y: 323 }, area: 'Sistemas y Electrónica',  color: '#6ec6ff' },
+  biotec: { name: 'Laboratorio de Biotecnología', sign: { x: 137, y: 268 }, area: 'Biomédica y Química',     color: '#c5e86c' },
+  quim:   { name: 'Lab de Bioreactores',          sign: { x: 760, y: 268 }, area: 'Química y Ambiental',     color: '#86e08a' },
+  robot:  { name: 'Lab AIA',                      sign: { x: 878, y: 216 }, area: 'Industrial y Mecánica',   color: '#ff8a65' },
+  bio:    { name: 'Lab Ingeniería de Tejidos',    sign: { x: 555, y: 164 }, area: 'Biomédica y Datos',       color: '#ff9ecf' },
+  prof:   { name: 'Oficinas de Profesores',       sign: { x: 625, y: 111 }, area: 'Civil y Ambiental',       color: '#e6d36a' },
 };
 
 const EVENTS = [
@@ -126,7 +130,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 7, item: 'Microscopio Biomédico', lab: 'bio', x: 420, row: 207,
+    id: 7, item: 'Microscopio', lab: 'bio', x: 675, row: 207,
     context: 'Un grupo de investigación tiene cientos de imágenes y muestras guardadas sin ningún orden. Les urge saber qué sirve y qué no.',
     question: '¿Qué haces primero?',
     options: [
@@ -138,7 +142,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 8, item: "Professor's Chalkboard", lab: 'prof', x: 500, row: 102,
+    id: 8, item: "Professor's Chalkboard", lab: 'prof', x: 760, row: 155,
     context: 'Un profesor no puede trabajar: en la tarde su oficina se vuelve un horno y el aire no circula. Te pide ayuda antes de reportarlo.',
     question: '¿Qué haces primero?',
     options: [

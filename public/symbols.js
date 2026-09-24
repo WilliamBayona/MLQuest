@@ -74,22 +74,23 @@ function drawStar(ctx, cx, by) {
 // a floor number, as the black-and-yellow display above each lift door
 function drawFloorTag(ctx, cx, top, n) {
   ctx.fillStyle = '#000';
-  ctx.fillRect(cx - 5, top, 11, 10);
+  ctx.fillRect(cx - 6, top, 13, 11);
   ctx.fillStyle = MARK;
-  ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(String(n), cx + 0.5, top + 8);
+  ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(String(n), cx + 0.5, top + 9);
 }
-// a lab's sign: its short name on a plaque in the lab's colour
+// a lab's sign: its name on a plaque in the lab's colour
+const SIGN_FONT = 'bold 9px monospace', SIGN_H = 11;
+function labSignWidth(ctx, lab) { ctx.font = SIGN_FONT; return Math.ceil(ctx.measureText(lab.name).width) + 6; }
 function drawLabSign(ctx, cx, top, lab) {
-  ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  const w = Math.ceil(ctx.measureText(lab.short).width) + 6;
-  const x = Math.round(cx - w / 2);
+  const w = labSignWidth(ctx, lab), x = Math.round(cx - w / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#000';
-  ctx.fillRect(x, top, w, 10);
+  ctx.fillRect(x, top, w, SIGN_H);
   ctx.fillStyle = lab.color;
-  ctx.fillRect(x + 1, top + 1, w - 2, 8);
+  ctx.fillRect(x + 1, top + 1, w - 2, SIGN_H - 2);
   ctx.fillStyle = '#000';
-  ctx.fillText(lab.short, cx, top + 8);
+  ctx.fillText(lab.name, cx, top + 8);
 }
 // the action button in miniature, floated over a player who can use it right where they stand
 function drawActButton(ctx, cx, cy) {

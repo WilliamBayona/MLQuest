@@ -317,7 +317,7 @@ function showQuestion(m) {
 }
 function showSaved(m) {
   const left = m.total - m.collected;
-  setHeader('Respuesta guardada', m.item, m.collected + '/' + m.total);
+  setHeader('Respuesta guardada', m.room, m.collected + '/' + m.total);
   qBody.appendChild(note(`Te ${left === 1 ? 'falta 1 evento' : `faltan ${left} eventos`}. Busca otro signo de admiración y oprime {act} debajo de él.`));
   openQuiz('saved');
   flashTimer = setTimeout(closeQuiz, 1800);
@@ -397,7 +397,7 @@ function mapSymbols() {
   return [
     legendItem(symbolCanvas(16, 18, 3, (g) => drawBang(g, 8, 16)), 'Evento',
       'Párate debajo y oprime {act} para responder su pregunta.'),
-    legendItem(symbolCanvas(52, 12, 2, (g) => drawLabSign(g, 26, 1, firstLab)), 'Laboratorio',
+    legendItem(symbolCanvas(labSignWidth(document.createElement('canvas').getContext('2d'), firstLab) + 2, 13, 2, (g) => drawLabSign(g, (labSignWidth(g, firstLab) + 2) / 2, 1, firstLab)), 'Laboratorio',
       'El letrero de color dice qué laboratorio es.'),
     legendItem(symbolCanvas(dw, dh + 13, 2, (g) => { drawFloorTag(g, LIFT.x - door.x0, 0, 2); g.drawImage(mapImg, door.x0, liftRow + door.top, dw, dh, 0, 13, dw, dh); }), 'Ascensor',
       `Frente a sus puertas oprime {act} y elige un piso del 1 al ${TOP_FLOOR}.`),
