@@ -23,25 +23,39 @@
   .acts button { position:absolute; border-radius:50%; }
   [data-b=jump] { width:46%; aspect-ratio:1; right:2%; bottom:12%; font-size:clamp(14px,3.5vw,22px); background:#3a5fcd; }
   [data-b=dash] { width:38%; aspect-ratio:1; left:6%; bottom:0; font-size:clamp(12px,3vw,18px); background:#2f8f5b; }
-  [data-b=hit]  { width:28%; aspect-ratio:1; left:22%; top:0; font-size:clamp(11px,2.6vw,16px); background:#b8862b; }
+  [data-b=act]  { width:28%; aspect-ratio:1; left:22%; top:0; font-size:clamp(10px,2.3vw,15px); background:#b8862b; }
+  /* standing under one of your events: ACCIÓN pulses so you know it opens the question */
+  [data-b=act].ready { background:#e0a92e; animation:ready .8s ease-in-out infinite alternate; }
+  @keyframes ready { from { box-shadow:0 5px 0 #0d0b14, 0 0 0 0 #ffd23f; } to { box-shadow:0 5px 0 #0d0b14, 0 0 0 7px #ffd23f88; } }
   [data-b=die]  { width:22%; aspect-ratio:1; right:8%; top:0; font-size:clamp(11px,2.4vw,15px); background:#7a2a3a; }
   [data-b].on { background:var(--accent); }
-  /* quiz panel: takes over the phone while the character is standing under a marker */
-  #quiz { position:fixed; inset:0; z-index:12; background:var(--bg); color:var(--fg); display:none;
+  /* quiz panel: takes over the whole phone, controls hidden, "¿Quién quiere ser millonario?" style */
+  body.quizzing .pad, body.quizzing .status { display:none; }
+  #quiz { position:fixed; inset:0; z-index:12; background:radial-gradient(ellipse at 50% 0%, #1c2b70 0%, #070b24 75%); color:var(--fg); display:none;
           flex-direction:column; padding:max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
   #quiz.on { display:flex; }
   #quiz header { display:flex; align-items:baseline; gap:10px; flex:0 0 auto; }
-  #quiz h1 { margin:0; font-size:14px; color:var(--accent); }
+  #quiz h1 { margin:0; font-size:14px; color:#f2a531; }
   #quiz .floor { font-size:12px; opacity:.7; }
   #quiz .clock { margin-left:auto; font-size:14px; font-weight:700; }
   #quiz .clock.low { color:#ff7070; }
-  #quiz .body { flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:6px; }
-  #quiz .ctx { font-size:13px; line-height:1.4; margin:0 0 6px; }
-  #quiz .q { font-size:13px; font-weight:700; margin:0 0 8px; }
-  #quiz .opts { display:grid; gap:6px; }
-  #quiz .opts button { display:flex; gap:8px; align-items:flex-start; text-align:left; padding:9px 10px; font-size:13px; line-height:1.35;
-                       border-radius:10px; box-shadow:0 3px 0 #0d0b14; background:var(--panel); }
-  #quiz .opts button .k { color:var(--accent); font-weight:700; }
+  #quiz .body { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:6px; }
+  #quiz .body.ask { display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+  /* the question box: shrinks and scrolls on its own so the answers always stay on screen */
+  #quiz .stem { flex:1 1 auto; min-height:0; display:flex; overflow-y:auto; touch-action:pan-y; text-align:center;
+                border:2px solid #9fb3ff; border-radius:16px; background:linear-gradient(#13236a, #050a2a); padding:6px 16px; }
+  #quiz .stem > div { margin:auto; }
+  #quiz .ctx { font-size:clamp(11px, 2.1vw, 14px); line-height:1.35; margin:0 0 4px; opacity:.9; }
+  #quiz .q { font-size:clamp(12px, 2.4vw, 16px); font-weight:700; margin:0; color:#fff; }
+  /* answers: 2x2, and a fifth one centred underneath */
+  #quiz .opts { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
+  #quiz .opts button { display:flex; gap:8px; align-items:center; text-align:left; min-height:46px; padding:5px 18px;
+                       font-size:clamp(11px, 2vw, 14px); line-height:1.25; font-weight:600; color:#fff;
+                       border:2px solid #9fb3ff; border-radius:999px; box-shadow:none; background:linear-gradient(#1a2c85, #060d33); }
+  #quiz .opts button:nth-child(5) { grid-column:1 / -1; justify-self:center; width:calc(50% - 6px); }
+  #quiz .opts button .k { color:#f2a531; font-weight:800; flex:0 0 auto; }
+  #quiz .opts button.pick { background:linear-gradient(#ffc451, #d97a0c); color:#14121c; border-color:#fff2c4; }
+  #quiz .opts button.pick .k { color:#14121c; }
   #quiz .note { margin:10px 0 0; font-size:13px; text-align:center; opacity:.85; }
   #quiz .rank { display:grid; gap:8px; margin-top:10px; }
   #quiz .rank div { background:var(--panel); border-radius:10px; padding:10px 12px; font-size:14px; }
@@ -59,7 +73,7 @@
     <button data-b="up">▲</button><button data-b="left">◀</button><button data-b="right">▶</button><button data-b="down">▼</button>
   </div>
   <div class="acts">
-    <button data-b="hit">GOLPE</button>
+    <button data-b="act">ACCIÓN</button>
     <button data-b="die">MORIR</button>
     <button data-b="dash">DASH</button>
     <button data-b="jump">SALTO</button>
@@ -89,6 +103,7 @@ function connect() {
     else if (m.t === 'saved') showSaved(m);
     else if (m.t === 'result') showResult(m);
     else if (m.t === 'close') closeQuiz();
+    else if (m.t === 'near') actBtn.classList.toggle('ready', !!m.on);
     if (m.t === 'hello' || m.t === 'status') {
       if (m.games !== undefined) games = m.games;
       dot.classList.toggle('on', games > 0);
@@ -102,6 +117,7 @@ function connect() {
 const quiz = document.getElementById('quiz');
 const qRoom = document.getElementById('qRoom'), qFloor = document.getElementById('qFloor');
 const qClock = document.getElementById('qClock'), qBody = document.getElementById('qBody');
+const actBtn = document.querySelector('[data-b=act]');
 let clockTimer = null;
 
 function releaseAll() {
@@ -109,8 +125,13 @@ function releaseAll() {
   document.querySelectorAll('button.on').forEach((b) => b.classList.remove('on'));
   send();
 }
+function openQuiz() {
+  quiz.classList.add('on');
+  document.body.classList.add('quizzing');
+}
 function closeQuiz() {
   quiz.classList.remove('on');
+  document.body.classList.remove('quizzing');
   clearInterval(clockTimer); clockTimer = null;
 }
 function startClock(seconds) {
@@ -130,29 +151,42 @@ function showQuestion(m) {
   qFloor.textContent = m.floor;
   startClock(m.seconds);
   qBody.innerHTML = '';
+  qBody.classList.add('ask');
+  const stem = document.createElement('div'); stem.className = 'stem';
+  const inner = document.createElement('div');
   const ctx = document.createElement('p'); ctx.className = 'ctx'; ctx.textContent = m.context;
   const q = document.createElement('p'); q.className = 'q'; q.textContent = m.question;
+  inner.append(ctx, q); stem.appendChild(inner);
   const list = document.createElement('div'); list.className = 'opts';
+  let picked = false;
   m.options.forEach((text, i) => {
     const b = document.createElement('button');
-    b.innerHTML = '<span class="k">' + 'ABCDE'[i] + '</span><span></span>';
+    b.innerHTML = '<span class="k">' + 'ABCDE'[i] + ':</span><span></span>';
     b.lastChild.textContent = text;
     b.addEventListener('click', () => {
-      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'answer', ev: m.ev, choice: i }));
+      if (picked) return;
+      picked = true;
+      b.classList.add('pick');                // light up the "final answer" for a moment, then send it
       if (navigator.vibrate) navigator.vibrate(15);
-      closeQuiz();
+      setTimeout(() => {
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'answer', ev: m.ev, choice: i }));
+        closeQuiz();
+      }, 350);
     });
     list.appendChild(b);
   });
-  qBody.append(ctx, q, list);
-  quiz.classList.add('on');
+  qBody.append(stem, list);
+  openQuiz();
 }
 function showSaved(m) {
   qRoom.textContent = 'Respuesta guardada';
   qFloor.textContent = m.item || '';
   qClock.textContent = m.collected + '/' + m.total;
-  qBody.innerHTML = '<p class="note">Sigue explorando el edificio. Al final del pasillo del ultimo piso te digo tus 3 carreras mas afines.</p>';
-  quiz.classList.add('on');
+  const left = m.total - m.collected;
+  qBody.classList.remove('ask');
+  qBody.innerHTML = '<p class="note">Te ' + (left === 1 ? 'falta 1 evento' : 'faltan ' + left + ' eventos') +
+    '. Busca los signos de admiracion con tu color y oprime ACCION debajo de ellos.</p>';
+  openQuiz();
   clearInterval(clockTimer);
   setTimeout(closeQuiz, 1800);
 }
@@ -163,8 +197,9 @@ function showResult(m) {
   qFloor.textContent = '';
   qClock.textContent = m.collected + '/' + m.total;
   qBody.innerHTML = '';
+  qBody.classList.remove('ask');
   if (!m.top.length || !m.collected) {
-    qBody.innerHTML = '<p class="note">Todavia no has respondido nada. Busca los signos de admiracion por el edificio.</p>';
+    qBody.innerHTML = '<p class="note">Todavia no has respondido nada. Busca los signos de admiracion con tu color.</p>';
   } else {
     const list = document.createElement('div'); list.className = 'rank';
     m.top.forEach((c, i) => {
@@ -175,16 +210,11 @@ function showResult(m) {
       list.appendChild(row);
     });
     qBody.appendChild(list);
-    if (m.collected < m.total) {
-      const note = document.createElement('p'); note.className = 'note';
-      note.textContent = 'Respondidas ' + m.collected + ' de ' + m.total + '. Entre mas respondas, mas fiable el resultado.';
-      qBody.appendChild(note);
-    }
   }
-  const btn = document.createElement('button'); btn.className = 'close'; btn.textContent = 'Seguir jugando';
+  const btn = document.createElement('button'); btn.className = 'close'; btn.textContent = 'Cerrar';
   btn.addEventListener('click', closeQuiz);
   qBody.appendChild(btn);
-  quiz.classList.add('on');
+  openQuiz();
 }
 
 // Each button tracks its own pointer, so several can be held at once (multi-touch).

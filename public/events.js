@@ -17,6 +17,7 @@ const CAREERS = {
 };
 
 const ANSWER_SECONDS = 45;
+const EVENTS_PER_PLAYER = 4;   // each player is dealt this many rooms; answering them all gives the result
 
 const EVENTS = [
   {
@@ -116,10 +117,6 @@ const EVENTS = [
     ],
   },
 ];
-
-// The end of the top-floor corridor, where the ranking is handed over. The corridor runs out at
-// the wall by the lift shaft (x 903), so the star sits just short of it.
-const GOAL = { x: 880, row: 102, floor: 'Piso 8', room: 'Final del pasillo' };
 
 // All the points each career has on offer across the 40 options. They are not equal (15 to 17),
 // so the ranking divides by this first — the correction the test document asks for.

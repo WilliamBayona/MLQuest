@@ -181,8 +181,8 @@ const K = (x, y) => (x < 0 || x >= W || y < 0 || y >= H) ? 1 : kind[y * W + x];
 
 // ---------- input (websocket + keyboard) ----------
 // Every player (one per phone, plus an optional keyboard player) owns its input state and edge latches.
-const BUTTONS = ['left', 'right', 'up', 'down', 'jump', 'dash', 'hit', 'die'];
-const EDGE = ['jump', 'dash', 'hit', 'die'];
+const BUTTONS = ['left', 'right', 'up', 'down', 'jump', 'dash', 'act', 'die'];
+const EDGE = ['jump', 'dash', 'act', 'die'];
 const players = new Map();
 let kbPlayer = null;
 
@@ -193,7 +193,7 @@ function onRemote(p, s) {
 const KEYMAP = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up',
   ArrowDown: 'down', KeyS: 'down', Space: 'jump', KeyZ: 'jump', ShiftLeft: 'dash', ShiftRight: 'dash', KeyX: 'dash',
-  KeyH: 'hit', KeyK: 'die',
+  KeyE: 'act', KeyK: 'die',
 };
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
@@ -217,7 +217,7 @@ const held = (a) => !!P.input[a];
 // ---------- player ----------
 let P;   // the player currently being updated / drawn
 function addPlayer(id, slot) {
-  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, askT: 0, near: null, atGoal: false };
+  const p = { id, slot, input: {}, latch: {}, score: {}, events: pickEvents(), done: new Set(), asking: null, askT: 0, near: null };
   players.set(id, p);
   const prev = P; P = p; respawn(); P = prev;
   updateStatus();
@@ -300,7 +300,7 @@ function moveY(dy) {
 
 function step(dt) {
   if (P.asking) {
-    P.latch.jump = P.latch.dash = P.latch.hit = P.latch.die = false; P.input = {};
+    P.latch.jump = P.latch.dash = P.latch.act = P.latch.die = false; P.input = {};
     P.askT -= dt;
     const left = document.getElementById('qt');
     if (left && P.id === 'kb') left.textContent = Math.max(0, Math.ceil(P.askT));
@@ -308,8 +308,8 @@ function step(dt) {
   }
   const left = held('left'), right = held('right'), up = held('up'), down = held('down');
   const dirX = (right ? 1 : 0) - (left ? 1 : 0);
-  const L = P.latch, jumpP = L.jump, dashP = L.dash, hitP = L.hit, dieP = L.die;
-  L.jump = L.dash = L.hit = L.die = false;
+  const L = P.latch, jumpP = L.jump, dashP = L.dash, dieP = L.die;
+  L.jump = L.dash = L.die = false;      // act is read by checkMarkers()
 
   P.animT += dt;
   if (dieP && !P.dead) { P.dead = true; P.deadT = 0; P.vx = 0; P.vy = -200; P.dashT = 0; P.hitT = 0; setAnim('Death'); }
@@ -331,11 +331,6 @@ function step(dt) {
   // down while standing on a thin floor: drop through to the floor below
   if (P.ground && down && P.hitT <= 0 && P.dashT <= 0 && onThinFloor()) { P.dropT = DROP_TIME; P.ground = false; P.coyote = 0; P.y += 1; }
   P.wallDir = !P.ground ? (wallSide(1) ? 1 : wallSide(-1) ? -1 : 0) : 0;
-
-  // hit (damage reaction with knockback)
-  if (hitP && P.hitT <= 0 && P.dashT <= 0) {
-    P.hitT = HIT_TIME; P.vx = -P.face * 100; P.vy = -190; P.ground = false; setAnim('Hit');
-  }
 
   const dashing = P.dashT > 0;
   if (dashP && P.dashCd <= 0 && !dashing && P.hitT <= 0 && (P.ground || P.airDash)) {
@@ -405,13 +400,19 @@ function step(dt) {
 function setAnim(a) { if (P.anim !== a) { P.anim = a; P.animT = 0; } }
 
 // ---------- the aptitude test, laid over the building ----------
-// Each room in EVENTS floats an exclamation mark. Walk under it and the question goes to that
-// player's phone; the answer comes back and adds to their score. The star at the end of the
-// top-floor corridor hands over their top 3 careers.
+// Each room in EVENTS floats an exclamation mark. Every player is dealt EVENTS_PER_PLAYER of them
+// at random; standing under one of theirs and pressing ACCIÓN sends the question to their phone.
+// The answer adds to their score, and the last one hands over their top 3 careers.
 let ws = null;
 const toPhone = (id, msg) => { if (ws && ws.readyState === 1 && id !== 'kb') ws.send(JSON.stringify({ ...msg, id })); };
 const atMarker = (p, m) => p.ground && Math.abs(p.x + HB_W / 2 - m.x) < 14 && Math.abs(p.y + HB_H - m.row) <= 4;
+const finished = (p) => p.done.size >= EVENTS_PER_PLAYER;
 
+function pickEvents() {
+  const ids = EVENTS.map((e) => e.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  return new Set(ids.slice(0, EVENTS_PER_PLAYER));
+}
 function askEvent(p, ev) {
   p.asking = ev;
   p.askT = ANSWER_SECONDS;
@@ -433,26 +434,31 @@ function answerEvent(p, choice) {
   for (const [k, v] of Object.entries(ev.options[choice].s)) p.score[k] = (p.score[k] || 0) + v;
   p.done.add(ev.id);
   closeAsk(p);
-  toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS.length });
+  if (finished(p)) sendResult(p);
+  else toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS_PER_PLAYER });
   updateStatus();
 }
 function sendResult(p) {
   const res = {
-    t: 'result', collected: p.done.size, total: EVENTS.length,
+    t: 'result', collected: p.done.size, total: EVENTS_PER_PLAYER,
     top: ranking(p.score).slice(0, 3).map((c) => ({ name: c.name, pct: c.pct, points: c.points })),
   };
   toPhone(p.id, res);
   if (p.id === 'kb') localQuiz(res);
 }
+function setNear(p, id) {
+  if (p.near === id) return;
+  p.near = id;
+  toPhone(p.id, { t: 'near', on: id !== null });   // the phone lights up its ACCIÓN button
+}
+// runs after step(), so the ACCIÓN latch is still set: nothing fires by just walking past a marker
 function checkMarkers(p) {
+  const act = p.latch.act; p.latch.act = false;
   if (p.dead || p.asking) return;
-  let near = null;
-  for (const ev of EVENTS) if (atMarker(p, ev)) { near = ev.id; break; }
-  if (near === null && atMarker(p, GOAL)) near = 'goal';
-  if (near === p.near) return;          // only on arrival, so a timed-out question is not re-asked on the spot
-  p.near = near;
-  if (near === 'goal') sendResult(p);
-  else if (near !== null && !p.done.has(near)) askEvent(p, EVENTS.find((e) => e.id === near));
+  if (finished(p)) { setNear(p, null); if (act) sendResult(p); return; }
+  const ev = EVENTS.find((e) => p.events.has(e.id) && !p.done.has(e.id) && atMarker(p, e));
+  setNear(p, ev ? ev.id : null);
+  if (ev && act) askEvent(p, ev);
 }
 
 // the markers themselves, drawn over the map
@@ -463,21 +469,18 @@ function drawBang(cx, by, col) {
   ctx.fillRect(cx - 2, by - 12, 4, 7);
   ctx.fillRect(cx - 2, by - 3, 4, 2);
 }
-function drawStar(cx, by) {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(cx - 5, by - 12, 10, 12);
-  ctx.fillStyle = '#ffd23f';
-  ctx.fillRect(cx - 1, by - 11, 2, 10);
-  ctx.fillRect(cx - 4, by - 7, 8, 2);
-  ctx.fillRect(cx - 3, by - 9, 6, 6);
-}
 function drawMarkers(t) {
-  const wanted = (id) => players.size === 0 || [...players.values()].some((p) => !p.done.has(id));
   for (const ev of EVENTS) {
-    const bob = Math.round(Math.sin(t * 2.2 + ev.id) * 2);
-    drawBang(ev.x, ev.row - 20 + bob, wanted(ev.id) ? '#ffd23f' : '#5c5c5c');
+    const owners = [...players.values()].filter((p) => p.events.has(ev.id) && !p.done.has(ev.id));
+    const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
+    drawBang(ev.x, by, owners.length || !players.size ? '#ffd23f' : '#5c5c5c');
+    // one pip per player who still has this event to answer, in their tag colour
+    const x0 = Math.round(ev.x - (owners.length * 6 - 1) / 2);
+    owners.forEach((p, i) => {
+      ctx.fillStyle = '#000'; ctx.fillRect(x0 + i * 6, by - 20, 5, 5);
+      ctx.fillStyle = tagColor(p); ctx.fillRect(x0 + i * 6 + 1, by - 19, 3, 3);
+    });
   }
-  drawStar(GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
 }
 
 // the same question on the game screen, for whoever is playing on the keyboard
@@ -505,6 +508,7 @@ const tinted = new Map();      // slot -> { anim: canvas }, hue-rotated copies o
 const HUES = [0, 200, 100, 290];
 const hueFor = (slot) => (slot === 0 ? 60 : HUES[(slot - 1) % HUES.length]);
 const LABEL_COLORS = ['#e16714', '#4aa3ff', '#5fd068', '#c76bff'];
+const tagColor = (p) => (p.slot === 0 ? '#c9b400' : LABEL_COLORS[(p.slot - 1) % LABEL_COLORS.length]);
 
 function tintedSheets(slot) {
   const hue = hueFor(slot);
@@ -550,8 +554,14 @@ function drawPlayer() {
   ctx.restore();
   // tiny tag over the head so players can tell each other apart
   ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = P.slot === 0 ? '#c9b400' : LABEL_COLORS[(P.slot - 1) % LABEL_COLORS.length];
+  ctx.fillStyle = tagColor(P);
   ctx.fillText(P.slot === 0 ? 'KB' : `P${P.slot}`, cx, by - 19);
+  // standing under one of their events: remind them which button opens it
+  if (P.near !== null && !P.asking) {
+    ctx.font = 'bold 7px monospace';
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeText('ACCIÓN', cx, by - 28);
+    ctx.fillStyle = '#ffd23f'; ctx.fillText('ACCIÓN', cx, by - 28);
+  }
 }
 function draw(t) {
   ctx.clearRect(0, 0, W, H);
@@ -576,7 +586,7 @@ function updateStatus() {
   dot.classList.toggle('on', phones > 0);
   txt.textContent = !connected ? 'desconectado, reintentando…' : phones ? `${phones} control${phones > 1 ? 'es' : ''} conectado${phones > 1 ? 's' : ''}` : 'servidor ok · esperando control';
   const bar = document.getElementById('progress');
-  if (bar) bar.textContent = [...players.values()].map((p) => `${p.id === 'kb' ? 'KB' : 'P' + p.slot}: ${p.done.size}/${EVENTS.length}`).join(' · ');
+  if (bar) bar.textContent = [...players.values()].map((p) => `${p.id === 'kb' ? 'KB' : 'P' + p.slot}: ${p.done.size}/${EVENTS_PER_PLAYER}`).join(' · ');
 }
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=game`);
