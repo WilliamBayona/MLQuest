@@ -218,7 +218,7 @@ const held = (a) => !!P.input[a];
 // ---------- player ----------
 let P;   // the player currently being updated / drawn
 function addPlayer(id, slot) {
-  const p = { id, slot, input: {}, latch: {}, score: {}, events: pickEvents(), done: new Set(), asking: null, askT: 0, near: null };
+  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, askT: 0, near: null };
   players.set(id, p);
   const prev = P; P = p; respawn(); P = prev;
   sendProgress(p);
@@ -402,19 +402,15 @@ function step(dt) {
 function setAnim(a) { if (P.anim !== a) { P.anim = a; P.animT = 0; } }
 
 // ---------- the aptitude test, laid over the building ----------
-// Each room in EVENTS floats an exclamation mark. Every player is dealt EVENTS_PER_PLAYER of them
-// at random; standing under one of theirs and pressing ACCIÓN sends the question to their phone.
-// The answer adds to their score, and the last one hands over their top 3 careers.
+// Each room in EVENTS floats an exclamation mark, lit for everyone since the screen is shared.
+// Standing under one and pressing ACCIÓN sends its question to that player's phone; each player
+// answers any EVENTS_PER_PLAYER of them, never the same one twice, and the last one hands over
+// their top 3 careers.
 let ws = null;
 const toPhone = (id, msg) => { if (ws && ws.readyState === 1 && id !== 'kb') ws.send(JSON.stringify({ ...msg, id })); };
 const atMarker = (p, m) => p.ground && Math.abs(p.x + HB_W / 2 - m.x) < 14 && Math.abs(p.y + HB_H - m.row) <= 4;
 const finished = (p) => p.done.size >= EVENTS_PER_PLAYER;
 
-function pickEvents() {
-  const ids = EVENTS.map((e) => e.id);
-  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-  return new Set(ids.slice(0, EVENTS_PER_PLAYER));
-}
 function askEvent(p, ev) {
   p.asking = ev;
   p.askT = ANSWER_SECONDS;
@@ -460,9 +456,12 @@ function checkMarkers(p) {
   const act = p.latch.act; p.latch.act = false;
   if (p.dead || p.asking) return;
   if (finished(p)) { setNear(p, null); if (act) sendResult(p); return; }
-  const ev = EVENTS.find((e) => p.events.has(e.id) && !p.done.has(e.id) && atMarker(p, e));
-  setNear(p, ev ? ev.id : null);
-  if (ev && act) askEvent(p, ev);
+  const ev = EVENTS.find((e) => atMarker(p, e));
+  const open = ev && !p.done.has(ev.id);
+  setNear(p, open ? ev.id : null);
+  if (!ev || !act) return;
+  if (open) askEvent(p, ev);
+  else toPhone(p.id, { t: 'notice', title: 'Ya respondiste este evento', text: 'Busca otro signo de admiracion y oprime ACCION debajo de el.' });
 }
 
 // the markers themselves, drawn over the map
@@ -475,15 +474,8 @@ function drawBang(cx, by, col) {
 }
 function drawMarkers(t) {
   for (const ev of EVENTS) {
-    const owners = [...players.values()].filter((p) => p.events.has(ev.id) && !p.done.has(ev.id));
     const by = ev.row - 20 + Math.round(Math.sin(t * 2.2 + ev.id) * 2);
     drawBang(ev.x, by, '#ffd23f');   // always lit: the screen is shared, so a marker never goes out for everyone
-    // one pip per player who still has this event to answer, in their tag colour
-    const x0 = Math.round(ev.x - (owners.length * 6 - 1) / 2);
-    owners.forEach((p, i) => {
-      ctx.fillStyle = '#000'; ctx.fillRect(x0 + i * 6, by - 20, 5, 5);
-      ctx.fillStyle = tagColor(p); ctx.fillRect(x0 + i * 6 + 1, by - 19, 3, 3);
-    });
   }
 }
 
@@ -560,7 +552,7 @@ function drawPlayer() {
   ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = tagColor(P);
   ctx.fillText(P.slot === 0 ? 'KB' : `P${P.slot}`, cx, by - 19);
-  // standing under one of their events: remind them which button opens it
+  // standing under a marker they have not answered yet: remind them which button opens it
   if (P.near !== null && !P.asking) {
     ctx.font = 'bold 7px monospace';
     ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeText('ACCIÓN', cx, by - 28);
