@@ -26,6 +26,28 @@
   [data-b=hit]  { width:28%; aspect-ratio:1; left:22%; top:0; font-size:clamp(11px,2.6vw,16px); background:#b8862b; }
   [data-b=die]  { width:22%; aspect-ratio:1; right:8%; top:0; font-size:clamp(11px,2.4vw,15px); background:#7a2a3a; }
   [data-b].on { background:var(--accent); }
+  /* quiz panel: takes over the phone while the character is standing under a marker */
+  #quiz { position:fixed; inset:0; z-index:12; background:var(--bg); color:var(--fg); display:none;
+          flex-direction:column; padding:max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+  #quiz.on { display:flex; }
+  #quiz header { display:flex; align-items:baseline; gap:10px; flex:0 0 auto; }
+  #quiz h1 { margin:0; font-size:14px; color:var(--accent); }
+  #quiz .floor { font-size:12px; opacity:.7; }
+  #quiz .clock { margin-left:auto; font-size:14px; font-weight:700; }
+  #quiz .clock.low { color:#ff7070; }
+  #quiz .body { flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; margin-top:6px; }
+  #quiz .ctx { font-size:13px; line-height:1.4; margin:0 0 6px; }
+  #quiz .q { font-size:13px; font-weight:700; margin:0 0 8px; }
+  #quiz .opts { display:grid; gap:6px; }
+  #quiz .opts button { display:flex; gap:8px; align-items:flex-start; text-align:left; padding:9px 10px; font-size:13px; line-height:1.35;
+                       border-radius:10px; box-shadow:0 3px 0 #0d0b14; background:var(--panel); }
+  #quiz .opts button .k { color:var(--accent); font-weight:700; }
+  #quiz .note { margin:10px 0 0; font-size:13px; text-align:center; opacity:.85; }
+  #quiz .rank { display:grid; gap:8px; margin-top:10px; }
+  #quiz .rank div { background:var(--panel); border-radius:10px; padding:10px 12px; font-size:14px; }
+  #quiz .rank b { color:var(--ok); }
+  #quiz .rank .pos { color:var(--accent); font-weight:700; margin-right:6px; }
+  #quiz .close { margin-top:10px; padding:10px; font-size:14px; border-radius:10px; background:var(--panel); }
   .rotate { display:none; position:fixed; inset:0; background:var(--bg); z-index:9; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:18px; }
   @media (orientation:portrait) { .rotate { display:flex; } }
 </style>
@@ -43,6 +65,10 @@
     <button data-b="jump">SALTO</button>
   </div>
 </div>
+<div id="quiz">
+  <header><h1 id="qRoom"></h1><span class="floor" id="qFloor"></span><span class="clock" id="qClock"></span></header>
+  <div class="body" id="qBody"></div>
+</div>
 <div class="rotate">Gira el telefono a horizontal ↻</div>
 <script>
 'use strict';
@@ -59,6 +85,10 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.t === 'hello') { slot = m.slot; document.title = `ML Quest · J${slot}`; }
+    if (m.t === 'ask') showQuestion(m);
+    else if (m.t === 'saved') showSaved(m);
+    else if (m.t === 'result') showResult(m);
+    else if (m.t === 'close') closeQuiz();
     if (m.t === 'hello' || m.t === 'status') {
       if (m.games !== undefined) games = m.games;
       dot.classList.toggle('on', games > 0);
@@ -66,6 +96,95 @@ function connect() {
     }
   };
   ws.onclose = () => { dot.classList.remove('on'); txt.textContent = 'reconectando…'; setTimeout(connect, 800); };
+}
+
+// ---- the test: the game sends a question when the character reaches a marked room ----
+const quiz = document.getElementById('quiz');
+const qRoom = document.getElementById('qRoom'), qFloor = document.getElementById('qFloor');
+const qClock = document.getElementById('qClock'), qBody = document.getElementById('qBody');
+let clockTimer = null;
+
+function releaseAll() {
+  for (const k in state) state[k] = false;
+  document.querySelectorAll('button.on').forEach((b) => b.classList.remove('on'));
+  send();
+}
+function closeQuiz() {
+  quiz.classList.remove('on');
+  clearInterval(clockTimer); clockTimer = null;
+}
+function startClock(seconds) {
+  let left = seconds;
+  qClock.textContent = left + 's';
+  clearInterval(clockTimer);
+  clockTimer = setInterval(() => {
+    left -= 1;
+    qClock.textContent = Math.max(0, left) + 's';
+    qClock.classList.toggle('low', left <= 10);
+    if (left <= 0) clearInterval(clockTimer);
+  }, 1000);
+}
+function showQuestion(m) {
+  releaseAll();                       // drop the d-pad so the character stops where it is
+  qRoom.textContent = m.room;
+  qFloor.textContent = m.floor;
+  startClock(m.seconds);
+  qBody.innerHTML = '';
+  const ctx = document.createElement('p'); ctx.className = 'ctx'; ctx.textContent = m.context;
+  const q = document.createElement('p'); q.className = 'q'; q.textContent = m.question;
+  const list = document.createElement('div'); list.className = 'opts';
+  m.options.forEach((text, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = '<span class="k">' + 'ABCDE'[i] + '</span><span></span>';
+    b.lastChild.textContent = text;
+    b.addEventListener('click', () => {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'answer', ev: m.ev, choice: i }));
+      if (navigator.vibrate) navigator.vibrate(15);
+      closeQuiz();
+    });
+    list.appendChild(b);
+  });
+  qBody.append(ctx, q, list);
+  quiz.classList.add('on');
+}
+function showSaved(m) {
+  qRoom.textContent = 'Respuesta guardada';
+  qFloor.textContent = m.item || '';
+  qClock.textContent = m.collected + '/' + m.total;
+  qBody.innerHTML = '<p class="note">Sigue explorando el edificio. Al final del pasillo del ultimo piso te digo tus 3 carreras mas afines.</p>';
+  quiz.classList.add('on');
+  clearInterval(clockTimer);
+  setTimeout(closeQuiz, 1800);
+}
+function showResult(m) {
+  releaseAll();
+  clearInterval(clockTimer);
+  qRoom.textContent = 'Tus 3 carreras mas afines';
+  qFloor.textContent = '';
+  qClock.textContent = m.collected + '/' + m.total;
+  qBody.innerHTML = '';
+  if (!m.top.length || !m.collected) {
+    qBody.innerHTML = '<p class="note">Todavia no has respondido nada. Busca los signos de admiracion por el edificio.</p>';
+  } else {
+    const list = document.createElement('div'); list.className = 'rank';
+    m.top.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.innerHTML = '<span class="pos">' + (i + 1) + '</span><b></b> <span></span>';
+      row.querySelector('b').textContent = c.name;
+      row.querySelector('span:last-child').textContent = c.pct + '%';
+      list.appendChild(row);
+    });
+    qBody.appendChild(list);
+    if (m.collected < m.total) {
+      const note = document.createElement('p'); note.className = 'note';
+      note.textContent = 'Respondidas ' + m.collected + ' de ' + m.total + '. Entre mas respondas, mas fiable el resultado.';
+      qBody.appendChild(note);
+    }
+  }
+  const btn = document.createElement('button'); btn.className = 'close'; btn.textContent = 'Seguir jugando';
+  btn.addEventListener('click', closeQuiz);
+  qBody.appendChild(btn);
+  quiz.classList.add('on');
 }
 
 // Each button tracks its own pointer, so several can be held at once (multi-touch).
@@ -80,7 +199,8 @@ for (const btn of document.querySelectorAll('button[data-b]')) {
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, () => set(false));
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
 }
-document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+// block page scrolling, except inside the quiz panel, where long questions need to scroll
+document.addEventListener('touchmove', (e) => { if (!quiz.contains(e.target)) e.preventDefault(); }, { passive: false });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 addEventListener('blur', () => { for (const k in state) state[k] = false; document.querySelectorAll('.on').forEach((b) => b.classList.remove('on')); send(); });
 connect();

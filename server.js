@@ -58,6 +58,13 @@ wss.on('connection', (ws, req) => {
   if (role === 'game') {
     games.add(ws);
     for (const c of controllers) send(ws, { t: 'join', id: c.id, slot: c.slot });
+    // the game speaks back to one phone at a time: a question to answer, or its result
+    ws.on('message', (raw) => {
+      let msg;
+      try { msg = JSON.parse(raw); } catch { return; }
+      if (!msg.id) return;
+      for (const c of controllers) if (c.id === msg.id) send(c, msg);
+    });
     ws.on('close', () => { games.delete(ws); broadcast(controllers, { t: 'status', games: games.size }); });
     broadcast(controllers, { t: 'status', games: games.size });
     return;
@@ -73,6 +80,7 @@ wss.on('connection', (ws, req) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg.t === 'input') broadcast(games, { t: 'input', id: ws.id, slot: ws.slot, s: msg.s });
+    else if (msg.t === 'answer' || msg.t === 'seen') broadcast(games, { ...msg, id: ws.id, slot: ws.slot });
   });
   ws.on('close', () => {
     controllers.delete(ws);

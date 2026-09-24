@@ -5,7 +5,7 @@ const W = 1024, H = 576;
 const HB_W = 10, HB_H = 15;            // hitbox in world px; sprite frames are drawn at native 16px (1 sprite px = 1 map px)
 const GRAVITY = 1400, MAX_FALL = 460;
 const RUN_SPEED = 120, GROUND_ACC = 1200, AIR_ACC = 800, GROUND_FRIC = 1500;
-const JUMP_V = 500, COYOTE = 0.1, JUMP_BUFFER = 0.12;
+const JUMP_V = 355, COYOTE = 0.1, JUMP_BUFFER = 0.12;   // one fixed 42px hop: never a whole floor (52px)
 const WALL_SLIDE = 45, WALL_SLIDE_FAST = 130, WALL_CLIMB = 65;
 const WALL_JUMP_VX = 150, WALL_LOCK = 0.17;
 const DASH_TIME = 0.18, DASH_SPEED = 300, DASH_COOLDOWN = 0.45;
@@ -32,7 +32,24 @@ ctx.imageSmoothingEnabled = false;
 
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
-// kind map: 0 empty, 1 solid wall, 2 one-way platform (orange pixels of the map)
+// kind map: 0 empty, 1 solid wall, 2 one-way platform
+// The collision is read straight off ML.png, from two things the art is consistent about:
+//   · a floor slab is [black outline][light top strip][black][grey underside], and the grey
+//     never gets covered, so it is what marks every floor out;
+//   · anything standing on a floor — a table, a bench, a bookcase, the atrium platforms, a
+//     stair step — is outlined in black with open room above it.
+// Tall grey is a wall instead: the left pillar, the lift shaft, the stubs hanging off ceilings.
+const AIR = [0xdebc8b, 0xeae0c5, 0x9e8572, 0xb4b4b4, 0x786257, 0x5b965b];  // wood, cream, brown, lobby grey, earth, grass
+const UNDERSIDE = [0x696969, 0x323232];   // slab shading: light grey for floors, dark for the lobby beam
+const SURFACE_SINK = 4;   // stand this deep into the top of a floor slab, so the feet overlap it
+const OBJECT_SINK = 2;    // furniture tops are thinner than a slab, so the feet sit higher on them
+const SLAB_TOP = 8;       // a slab's outline sits this far above its grey underside
+const SLAB_CAP = 10;      // how far up to look for that outline before calling it a bare wall
+const MIN_LEDGE = 6;      // shorter black runs are trim and window frames, not somewhere to stand
+const WALL_RUN = 14;      // grey taller than this is a wall, on top of whatever floor it hangs from
+const STEP_W = 14;        // a stair tread is never wider than this
+const STEP_RUN = 3;       // and a flight is at least this many of them, so a machine isn't stairs
+const STEP_BODY = 8;      // fill this far down each tread, so a flight is solid from the side
 let kind;
 function buildCollision(img) {
   const off = document.createElement('canvas');
@@ -40,28 +57,125 @@ function buildCollision(img) {
   const octx = off.getContext('2d');
   octx.drawImage(img, 0, 0);
   const d = octx.getImageData(0, 0, W, H).data;
+  const rgb = new Int32Array(W * H);
+  for (let p = 0, i = 0; p < rgb.length; p++, i += 4) rgb[p] = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
   kind = new Uint8Array(W * H);
-  let topY = H, botY = 0;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const i = (y * W + x) * 4;
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    if (r > 180 && g > 70 && g < 140 && b < 70) { kind[y * W + x] = 2; if (y < topY) topY = y; if (y > botY) botY = y; }
-  }
-  // long vertical runs are walls (solid); short ones are thin floors (one-way, jump through from below)
+
+  // Every slab in the art is drawn the same way: [black outline][light top strip][black][grey
+  // underside]. The grey is what marks a floor out, because it runs unbroken beneath the
+  // furniture, where a table or a bookcase would otherwise hide the slab's own outline.
+  const isUnder = (c) => c === UNDERSIDE[0] || c === UNDERSIDE[1];
+  const runs = [];
   for (let x = 0; x < W; x++) {
     let y = 0;
     while (y < H) {
-      if (!kind[y * W + x]) { y++; continue; }
+      if (!isUnder(rgb[y * W + x])) { y++; continue; }
+      const c = rgb[y * W + x];
       let e = y;
-      while (e < H && kind[e * W + x]) e++;
-      if (e - y >= 14) for (let k = y; k < e; k++) kind[k * W + x] = 1;
+      while (e < H && rgb[e * W + x] === c) e++;
+      runs.push(x, y, e);
       y = e;
     }
   }
-  // floor of the frame is solid too (can't drop out of the map)
-  for (let y = botY - 7; y <= botY; y++) for (let x = 0; x < W; x++) if (kind[y * W + x]) kind[y * W + x] = 1;
-  // ceiling of the frame is solid so the player can't leave the map upward
-  for (let y = topY; y < topY + 8; y++) for (let x = 0; x < W; x++) if (kind[y * W + x]) kind[y * W + x] = 1;
+  // walk up from each grey run to the slab's outline; grey with nothing above it is the roof
+  const floors = [];
+  const lowest = new Int32Array(W).fill(-1);
+  let roofY = H;
+  for (let i = 0; i < runs.length; i += 3) {
+    const x = runs[i], y0 = runs[i + 1];
+    // a slab has an outline above its strip; the roof and bare walls do not. Measure the
+    // surface from the grey itself, since furniture often covers the strip and its outline.
+    let capped = false;
+    if (y0 > 0 && rgb[(y0 - 1) * W + x] === 0)
+      for (let t = y0 - 3; t >= y0 - SLAB_CAP && t >= 0; t--) if (rgb[t * W + x] === 0) { capped = true; break; }
+    if (!capped) { if (y0 < roofY) roofY = y0; continue; }
+    const top = y0 - SLAB_TOP;
+    floors.push(x, top);
+    if (top > lowest[x]) lowest[x] = top;
+  }
+  // a tall grey run is a wall — the left pillar, the lift shaft, the stubs hanging off a ceiling —
+  // and it is marked on top of the floor it hangs from, not instead of it
+  for (let i = 0; i < runs.length; i += 3) {
+    const x = runs[i], y0 = runs[i + 1], y1 = runs[i + 2];
+    if (y1 - y0 >= WALL_RUN || y0 < roofY + SLAB_CAP) for (let y = y0; y < y1; y++) kind[y * W + x] = 1;
+  }
+  for (let i = 0; i < floors.length; i += 2) {
+    const x = floors[i], top = floors[i + 1], row = (top + SURFACE_SINK) * W + x;
+    // with nothing below it, a floor is fully solid, so nobody can drop out of the world
+    if (kind[row] !== 1) kind[row] = top === lowest[x] ? 1 : 2;
+  }
+
+  // Everything standing on those floors — the tables, the benches, the bookcases, the white
+  // blocks — is outlined in black with open room above it. That outline is its top.
+  const isAir = (c) => {
+    for (let i = 0; i < AIR.length; i++) if (c === AIR[i]) return true;
+    const r = c >> 16, g = (c >> 8) & 255, b = c & 255;   // the sky is a gradient, so take its whole range
+    return r >= 185 && r <= 210 && g >= 215 && g <= 230 && b >= 230 && b <= 240;
+  };
+  // open space is a flat wall colour, or the black void outside the room — but a single black
+  // line is an outline, not space, so black only counts where it runs thick
+  const air = (x, y) => y < 0 || isAir(rgb[y * W + x]) ||
+    (rgb[y * W + x] === 0 && y > 1 && rgb[(y - 1) * W + x] === 0 && rgb[(y - 2) * W + x] === 0);
+  const body = (x, y) => { const c = rgb[y * W + x]; return c !== 0 && !isAir(c); };
+  const isTop = (x, y) => rgb[y * W + x] === 0 && air(x, y - 1) && body(x, y + 1) && body(x, y + 2) && body(x, y + 3);
+  for (let y = 1; y < H - 4; y++) {
+    let x = 0;
+    while (x < W) {
+      if (!isTop(x, y)) { x++; continue; }
+      let e = x;
+      while (e < W && isTop(e, y)) e++;
+      if (e - x >= MIN_LEDGE) {
+        for (let k = x; k < e; k++) {
+          // a floor slab already got its surface from the grey pass — leave those alone, this
+          // pass is only for what stands on top of them
+          let taken = false;
+          for (let r = y + OBJECT_SINK; r <= y + SURFACE_SINK + 2 && !taken; r++) taken = kind[r * W + k] !== 0;
+          if (!taken) kind[(y + OBJECT_SINK) * W + k] = 2;
+        }
+      }
+      x = e;
+    }
+  }
+
+  // Stairs are a chain of narrow treads stepping diagonally — some of them read as tiny slabs,
+  // some as ledges, so gather them off the finished map. Fill each tread's front in, and a
+  // flight becomes solid: it has to be climbed, not walked through from the side. Anything that
+  // steps alone — a machine, a shelf — stays a platform you can pass in front of.
+  const treads = [];
+  for (let y = 0; y < H; y++) {
+    let x = 0;
+    while (x < W) {
+      if (kind[y * W + x] !== 2) { x++; continue; }
+      let e = x;
+      while (e < W && kind[y * W + e] === 2) e++;
+      if (e - x <= STEP_W) treads.push(y, x, e - 1);
+      x = e;
+    }
+  }
+  const steps = (a, b) => {
+    const dy = Math.abs(treads[a] - treads[b]), dx = Math.abs(treads[a + 1] - treads[b + 1]);
+    return dy >= 4 && dy <= 12 && dx >= 3 && dx <= STEP_W;
+  };
+  const seen = new Uint8Array(treads.length / 3);
+  for (let s = 0; s < treads.length; s += 3) {
+    if (seen[s / 3]) continue;
+    const flight = [s];
+    seen[s / 3] = 1;
+    for (let q = 0; q < flight.length; q++)
+      for (let t = 0; t < treads.length; t += 3)
+        if (!seen[t / 3] && steps(flight[q], t)) { seen[t / 3] = 1; flight.push(t); }
+    if (flight.length < STEP_RUN) continue;
+    for (const i of flight) {
+      const y = treads[i], x0 = treads[i + 1], x1 = treads[i + 2];
+      // a tread is floor, not furniture, so put every one of them at floor height: the two
+      // passes sink by different amounts, which would leave 2px lips along the flight
+      const outline = rgb[(y - OBJECT_SINK) * W + x0] === 0 ? y - OBJECT_SINK : y - SURFACE_SINK;
+      for (let k = x0; k <= x1; k++) {
+        if (kind[y * W + k] === 2) kind[y * W + k] = 0;
+        for (let r = outline + SURFACE_SINK; r < outline + SURFACE_SINK + STEP_BODY && r < H; r++) kind[r * W + k] = 1;
+      }
+    }
+  }
 }
 const K = (x, y) => (x < 0 || x >= W || y < 0 || y >= H) ? 1 : kind[y * W + x];
 
@@ -103,7 +217,7 @@ const held = (a) => !!P.input[a];
 // ---------- player ----------
 let P;   // the player currently being updated / drawn
 function addPlayer(id, slot) {
-  const p = { id, slot, input: {}, latch: {} };
+  const p = { id, slot, input: {}, latch: {}, score: {}, done: new Set(), asking: null, askT: 0, near: null, atGoal: false };
   players.set(id, p);
   const prev = P; P = p; respawn(); P = prev;
   updateStatus();
@@ -115,7 +229,7 @@ function respawn() {
     x: SPAWN.x + (P.slot % 5) * 22, y: SPAWN.y, vx: 0, vy: 0, face: 1,
     ground: false, coyote: 0, jumpBuf: 0, wallDir: 0, grab: false, climbing: false,
     dashT: 0, dropT: 0, dashCd: 0, dashDir: 1, airDash: true, hitT: 0, lockT: 0,
-    dead: false, deadT: 0, anim: 'Fall', animT: 0, jumped: false,
+    dead: false, deadT: 0, anim: 'Fall', animT: 0,
   });
 }
 
@@ -162,7 +276,8 @@ function moveY(dy) {
     const ny = P.y + dir * s;
     const x0 = Math.floor(P.x);
     if (dir > 0) {
-      const prev = Math.floor(P.y + HB_H) - 1, row = Math.floor(ny + HB_H) - 1;
+      // rows just below the feet, the same row groundBelow() looks at, so landings snap to whole px
+      const prev = Math.floor(P.y + HB_H), row = Math.floor(ny + HB_H);
       if (row > prev) {
         let land = false;
         for (let x = x0; x < x0 + HB_W; x++) {
@@ -184,7 +299,14 @@ function moveY(dy) {
 }
 
 function step(dt) {
-  const left = held('left'), right = held('right'), up = held('up'), down = held('down'), jumpHeld = held('jump');
+  if (P.asking) {
+    P.latch.jump = P.latch.dash = P.latch.hit = P.latch.die = false; P.input = {};
+    P.askT -= dt;
+    const left = document.getElementById('qt');
+    if (left && P.id === 'kb') left.textContent = Math.max(0, Math.ceil(P.askT));
+    if (P.askT <= 0) closeAsk(P);         // ran out of time: step away and come back to retry
+  }
+  const left = held('left'), right = held('right'), up = held('up'), down = held('down');
   const dirX = (right ? 1 : 0) - (left ? 1 : 0);
   const L = P.latch, jumpP = L.jump, dashP = L.dash, hitP = L.hit, dieP = L.die;
   L.jump = L.dash = L.hit = L.die = false;
@@ -205,7 +327,7 @@ function step(dt) {
   if (jumpP) P.jumpBuf = JUMP_BUFFER;
 
   P.ground = groundBelow();
-  if (P.ground) { P.coyote = COYOTE; P.airDash = true; P.jumped = false; }
+  if (P.ground) { P.coyote = COYOTE; P.airDash = true; }
   // down while standing on a thin floor: drop through to the floor below
   if (P.ground && down && P.hitT <= 0 && P.dashT <= 0 && onThinFloor()) { P.dropT = DROP_TIME; P.ground = false; P.coyote = 0; P.y += 1; }
   P.wallDir = !P.ground ? (wallSide(1) ? 1 : wallSide(-1) ? -1 : 0) : 0;
@@ -240,10 +362,10 @@ function step(dt) {
     // jump / wall jump
     if (P.jumpBuf > 0 && P.hitT <= 0) {
       if (P.ground || P.coyote > 0) {
-        P.vy = -JUMP_V; P.ground = false; P.coyote = 0; P.jumpBuf = 0; P.jumped = true;
+        P.vy = -JUMP_V; P.ground = false; P.coyote = 0; P.jumpBuf = 0;
       } else if (P.wallDir) {
         P.vx = -P.wallDir * WALL_JUMP_VX; P.vy = -JUMP_V * 0.95; P.face = -P.wallDir;
-        P.lockT = WALL_LOCK; P.jumpBuf = 0; P.jumped = true; P.airDash = true; P.wallDir = 0;
+        P.lockT = WALL_LOCK; P.jumpBuf = 0; P.airDash = true; P.wallDir = 0;
       }
     }
 
@@ -257,10 +379,9 @@ function step(dt) {
       else P.climbing = false;
     } else P.climbing = false;
 
-    // gravity (heavier when the jump button is released early)
+    // gravity — one weight, so every jump is the same height however long the button is held
     if (!P.ground && !(P.grab && P.climbing)) {
-      const mult = (P.vy < 0 && !jumpHeld && P.jumped) ? 2.4 : 1;
-      P.vy = Math.min(P.vy + GRAVITY * mult * dt, MAX_FALL);
+      P.vy = Math.min(P.vy + GRAVITY * dt, MAX_FALL);
       if (P.grab && !down && !P.climbing && P.vy > WALL_SLIDE) P.vy = WALL_SLIDE;
     }
     if (P.ground && P.vy > 0) P.vy = 0;
@@ -282,6 +403,101 @@ function step(dt) {
   else setAnim(P.vy < 0 ? 'Jump' : 'Fall');
 }
 function setAnim(a) { if (P.anim !== a) { P.anim = a; P.animT = 0; } }
+
+// ---------- the aptitude test, laid over the building ----------
+// Each room in EVENTS floats an exclamation mark. Walk under it and the question goes to that
+// player's phone; the answer comes back and adds to their score. The star at the end of the
+// top-floor corridor hands over their top 3 careers.
+let ws = null;
+const toPhone = (id, msg) => { if (ws && ws.readyState === 1 && id !== 'kb') ws.send(JSON.stringify({ ...msg, id })); };
+const atMarker = (p, m) => p.ground && Math.abs(p.x + HB_W / 2 - m.x) < 14 && Math.abs(p.y + HB_H - m.row) <= 4;
+
+function askEvent(p, ev) {
+  p.asking = ev;
+  p.askT = ANSWER_SECONDS;
+  const ask = {
+    t: 'ask', ev: ev.id, room: ev.room, floor: ev.floor, item: ev.item, context: ev.context,
+    question: ev.question, options: ev.options.map((o) => o.t), seconds: ANSWER_SECONDS,
+  };
+  toPhone(p.id, ask);
+  if (p.id === 'kb') localQuiz(ask);
+}
+function closeAsk(p) {
+  p.asking = null;
+  toPhone(p.id, { t: 'close' });
+  if (p.id === 'kb') localQuiz(null);
+}
+function answerEvent(p, choice) {
+  const ev = p.asking;
+  if (!ev || !(choice >= 0 && choice < ev.options.length)) return;
+  for (const [k, v] of Object.entries(ev.options[choice].s)) p.score[k] = (p.score[k] || 0) + v;
+  p.done.add(ev.id);
+  closeAsk(p);
+  toPhone(p.id, { t: 'saved', item: ev.item, collected: p.done.size, total: EVENTS.length });
+  updateStatus();
+}
+function sendResult(p) {
+  const res = {
+    t: 'result', collected: p.done.size, total: EVENTS.length,
+    top: ranking(p.score).slice(0, 3).map((c) => ({ name: c.name, pct: c.pct, points: c.points })),
+  };
+  toPhone(p.id, res);
+  if (p.id === 'kb') localQuiz(res);
+}
+function checkMarkers(p) {
+  if (p.dead || p.asking) return;
+  let near = null;
+  for (const ev of EVENTS) if (atMarker(p, ev)) { near = ev.id; break; }
+  if (near === null && atMarker(p, GOAL)) near = 'goal';
+  if (near === p.near) return;          // only on arrival, so a timed-out question is not re-asked on the spot
+  p.near = near;
+  if (near === 'goal') sendResult(p);
+  else if (near !== null && !p.done.has(near)) askEvent(p, EVENTS.find((e) => e.id === near));
+}
+
+// the markers themselves, drawn over the map
+function drawBang(cx, by, col) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(cx - 3, by - 13, 6, 13);
+  ctx.fillStyle = col;
+  ctx.fillRect(cx - 2, by - 12, 4, 7);
+  ctx.fillRect(cx - 2, by - 3, 4, 2);
+}
+function drawStar(cx, by) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(cx - 5, by - 12, 10, 12);
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillRect(cx - 1, by - 11, 2, 10);
+  ctx.fillRect(cx - 4, by - 7, 8, 2);
+  ctx.fillRect(cx - 3, by - 9, 6, 6);
+}
+function drawMarkers(t) {
+  const wanted = (id) => players.size === 0 || [...players.values()].some((p) => !p.done.has(id));
+  for (const ev of EVENTS) {
+    const bob = Math.round(Math.sin(t * 2.2 + ev.id) * 2);
+    drawBang(ev.x, ev.row - 20 + bob, wanted(ev.id) ? '#ffd23f' : '#5c5c5c');
+  }
+  drawStar(GOAL.x, GOAL.row - 20 + Math.round(Math.sin(t * 2.2) * 2));
+}
+
+// the same question on the game screen, for whoever is playing on the keyboard
+const quizBox = document.getElementById('quiz');
+function localQuiz(m) {
+  if (!m) { quizBox.classList.add('hide'); return; }
+  quizBox.classList.remove('hide');
+  if (m.t === 'result') {
+    quizBox.innerHTML = `<h2>Top 3 · ${m.collected}/${m.total} respondidas</h2>` +
+      (m.top.length ? m.top.map((c, i) => `<p class="rank"><b>${i + 1}. ${c.name}</b> — ${c.pct}%</p>`).join('') : '<p>Responde algún evento primero.</p>');
+    return;
+  }
+  quizBox.innerHTML = `<h2>${m.room} · ${m.floor}</h2><p>${m.context}</p><p><b>${m.question}</b></p>` +
+    m.options.map((o, i) => `<p class="opt"><b>${i + 1}</b> ${o}</p>`).join('') +
+    `<p class="hint">Responde con las teclas 1–5 · <span id="qt">${m.seconds}</span>s</p>`;
+}
+addEventListener('keydown', (e) => {
+  const n = '12345'.indexOf(e.key);
+  if (n >= 0 && kbPlayer && kbPlayer.asking) { answerEvent(kbPlayer, n); e.preventDefault(); }
+});
 
 // ---------- render ----------
 let bg; const sheets = {};
@@ -324,6 +540,7 @@ function drawPlayer() {
   f = def.loop ? f % def.n : Math.min(f, def.n - 1);
   if (P.anim === 'Hit') f = Math.min(def.n - 1, Math.floor((P.animT / HIT_TIME) * def.n));
   if (P.dead && P.deadT > DEATH_TIME - 0.4 && Math.floor(P.deadT * 20) % 2) return; // blink before respawn
+  // the depth overlap lives in the collision mask (SURFACE_SINK), so the feet are drawn where they really are
   const cx = Math.round(P.x + HB_W / 2), by = Math.round(P.y + HB_H);
   ctx.save();
   ctx.translate(cx, by);
@@ -336,17 +553,18 @@ function drawPlayer() {
   ctx.fillStyle = P.slot === 0 ? '#c9b400' : LABEL_COLORS[(P.slot - 1) % LABEL_COLORS.length];
   ctx.fillText(P.slot === 0 ? 'KB' : `P${P.slot}`, cx, by - 19);
 }
-function draw() {
+function draw(t) {
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(bg, 0, 0);
+  drawMarkers(t);
   for (const p of players.values()) { P = p; drawPlayer(); }
 }
 
 let acc = 0, last = performance.now();
 function frame(now) {
   acc += Math.min(0.1, (now - last) / 1000); last = now;
-  while (acc >= STEP) { for (const p of players.values()) { P = p; step(STEP); } acc -= STEP; }
-  draw();
+  while (acc >= STEP) { for (const p of players.values()) { P = p; step(STEP); checkMarkers(p); } acc -= STEP; }
+  draw(now / 1000);
   requestAnimationFrame(frame);
 }
 
@@ -357,15 +575,19 @@ function updateStatus() {
   const phones = [...players.values()].filter((p) => p.id !== 'kb').length;
   dot.classList.toggle('on', phones > 0);
   txt.textContent = !connected ? 'desconectado, reintentando…' : phones ? `${phones} control${phones > 1 ? 'es' : ''} conectado${phones > 1 ? 's' : ''}` : 'servidor ok · esperando control';
+  const bar = document.getElementById('progress');
+  if (bar) bar.textContent = [...players.values()].map((p) => `${p.id === 'kb' ? 'KB' : 'P' + p.slot}: ${p.done.size}/${EVENTS.length}`).join(' · ');
 }
 function connect() {
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=game`);
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=game`);
   ws.onopen = () => { connected = true; updateStatus(); };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.t === 'join') { if (!players.has(m.id)) addPlayer(m.id, m.slot); }
     else if (m.t === 'leave') removePlayer(m.id);
     else if (m.t === 'input') { if (!players.has(m.id)) addPlayer(m.id, m.slot); onRemote(players.get(m.id), m.s || {}); }
+    else if (m.t === 'answer') { const p = players.get(m.id); if (p) answerEvent(p, m.choice); }
+    else if (m.t === 'seen') { const p = players.get(m.id); if (p && p.asking) closeAsk(p); }
   };
   ws.onclose = () => {
     connected = false; updateStatus(); setTimeout(connect, 1000);
@@ -374,7 +596,7 @@ function connect() {
 }
 
 (async function init() {
-  const [map, ...imgs] = await Promise.all([loadImg('MapaML.png'), ...Object.keys(SPRITES).map((n) => loadImg(`sprites/${n}.png`))]);
+  const [map, ...imgs] = await Promise.all([loadImg('ML.png'), ...Object.keys(SPRITES).map((n) => loadImg(`sprites/${n}.png`))]);
   bg = map;
   Object.keys(SPRITES).forEach((n, i) => { sheets[n] = imgs[i]; });
   buildCollision(map);

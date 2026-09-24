@@ -16,15 +16,26 @@
   .dot.on { background:var(--ok); }
   a { color:var(--accent); }
   kbd { background:var(--panel); padding:1px 5px; border-radius:3px; }
+  #quiz { position:fixed; right:12px; top:12px; width:min(380px, 42vw); max-height:calc(100vh - 24px); overflow:auto;
+          background:rgba(20,18,28,.94); color:var(--fg); border:2px solid var(--accent); border-radius:8px; padding:12px 14px; font-size:13px; line-height:1.45; }
+  #quiz.hide { display:none; }
+  #quiz h2 { margin:0 0 8px; font-size:14px; color:var(--accent); }
+  #quiz p { margin:6px 0; }
+  #quiz .opt b { display:inline-block; min-width:16px; color:var(--accent); }
+  #quiz .rank b { color:var(--ok); }
+  #quiz .hint { margin-top:10px; opacity:.75; font-size:12px; }
 </style>
 </head>
 <body>
 <canvas id="c" width="1024" height="576"></canvas>
+<div id="quiz" class="hide"></div>
 <div class="bar" id="bar">
   <span><span class="dot" id="wsDot"></span><span id="wsTxt">conectando…</span></span>
   <span>Telefono: <a id="ctrlUrl" href="/controller">/controller</a></span>
+  <span id="progress"></span>
   <span>Teclado: <kbd>←→↑↓</kbd> mover · <kbd>Espacio</kbd> saltar · <kbd>Shift</kbd> dash · <kbd>H</kbd> golpe · <kbd>K</kbd> morir · <kbd>F</kbd> pantalla completa · <kbd>I</kbd> ocultar info</span>
 </div>
+<script src="events.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
