@@ -7,6 +7,7 @@ const GRAVITY = 1400, MAX_FALL = 460;
 const RUN_SPEED = 120, GROUND_ACC = 1200, AIR_ACC = 800, GROUND_FRIC = 1500;
 const JUMP_V = 355, COYOTE = 0.1, JUMP_BUFFER = 0.12;   // one fixed 42px hop: never a whole floor (52px)
 const WALL_SLIDE = 45, WALL_SLIDE_FAST = 130, WALL_CLIMB = 65;
+
 const WALL_JUMP_VX = 150, WALL_LOCK = 0.17;
 const DASH_TIME = 0.18, DASH_SPEED = 300, DASH_COOLDOWN = 0.45;
 const DROP_TIME = 0.18, HIT_TIME = 0.5, DEATH_TIME = 1.4;
